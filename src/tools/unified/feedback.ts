@@ -1,0 +1,263 @@
+// Unified feedback tools
+
+import type { Tool } from '@modelcontextprotocol/sdk/types.js';
+import {
+  getArgs,
+  readString,
+  readNumber,
+  readBoolean,
+  parseBigIntInput,
+  parseChainParam,
+  parsePagination,
+} from '../../core/parsers/common.js';
+import { successResponse } from '../../core/serializers/common.js';
+import { globalState } from '../../state/global-state.js';
+import { parseGlobalId, isValidGlobalId } from '../../core/interfaces/agent.js';
+import type { IWritableChainProvider } from '../../core/interfaces/chain-provider.js';
+import { isWritableProvider } from '../../core/interfaces/chain-provider.js';
+
+export const feedbackTools: Tool[] = [
+  {
+    name: 'feedback_give',
+    description: 'Submit feedback for an agent (requires signer)',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        id: {
+          type: 'string',
+          description: 'Agent ID (global or chain-specific)',
+        },
+        score: {
+          type: 'number',
+          description: 'Feedback score (0-100)',
+        },
+        comment: {
+          type: 'string',
+          description: 'Optional feedback comment',
+        },
+        chain: {
+          type: 'string',
+          description: 'Chain to use (optional if using global ID)',
+        },
+        skipSend: {
+          type: 'boolean',
+          description: 'If true, returns unsigned transaction',
+        },
+      },
+      required: ['id', 'score'],
+    },
+  },
+  {
+    name: 'feedback_read',
+    description: 'Read a single feedback by agent, client, and index',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        id: {
+          type: 'string',
+          description: 'Agent ID',
+        },
+        client: {
+          type: 'string',
+          description: 'Client address who gave feedback',
+        },
+        index: {
+          type: ['number', 'string'],
+          description: 'Feedback index',
+        },
+        chain: {
+          type: 'string',
+          description: 'Chain to use',
+        },
+      },
+      required: ['id', 'client', 'index'],
+    },
+  },
+  {
+    name: 'feedback_list',
+    description: 'List all feedbacks for an agent',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        id: {
+          type: 'string',
+          description: 'Agent ID',
+        },
+        client: {
+          type: 'string',
+          description: 'Filter by client address',
+        },
+        minScore: {
+          type: 'number',
+          description: 'Minimum score filter',
+        },
+        maxScore: {
+          type: 'number',
+          description: 'Maximum score filter',
+        },
+        chain: {
+          type: 'string',
+          description: 'Chain to use',
+        },
+        limit: {
+          type: 'number',
+          description: 'Max results (default: 20)',
+        },
+        offset: {
+          type: 'number',
+          description: 'Pagination offset',
+        },
+      },
+      required: ['id'],
+    },
+  },
+];
+
+export const feedbackHandlers: Record<string, (args: unknown) => Promise<unknown>> = {
+  feedback_give: async (args: unknown) => {
+    const input = getArgs(args);
+    const agentId = readString(input, 'id', true);
+    const score = readNumber(input, 'score', true);
+    const comment = readString(input, 'comment');
+    const skipSend = readBoolean(input, 'skipSend') ?? false;
+    const { chainPrefix } = parseChainParam(input);
+
+    // Validate score
+    if (score < 0 || score > 100) {
+      throw new Error('Score must be between 0 and 100');
+    }
+
+    // Resolve provider
+    let provider;
+    let rawId = agentId;
+
+    if (isValidGlobalId(agentId)) {
+      const parsed = parseGlobalId(agentId);
+      provider = globalState.chains.getByPrefix(parsed.prefix);
+      rawId = parsed.rawId;
+    } else if (chainPrefix) {
+      provider = globalState.chains.getByPrefix(chainPrefix as 'sol' | 'base' | 'eth' | 'arb' | 'poly' | 'op');
+    } else {
+      provider = globalState.chains.getDefault();
+    }
+
+    if (!provider) {
+      throw new Error('No chain provider available');
+    }
+
+    // For skipSend, we can use a provider that doesn't have a signer
+    // Otherwise, we need a writable provider
+    if (!skipSend && !isWritableProvider(provider)) {
+      throw new Error('Chain provider does not support write operations or signer not configured. Use skipSend=true to get unsigned transaction.');
+    }
+
+    // Check if provider has giveFeedback method
+    if (typeof provider.giveFeedback !== 'function') {
+      throw new Error('Chain provider does not support feedback operations');
+    }
+
+    const result = await (provider as IWritableChainProvider).giveFeedback(
+      { agentId: rawId, score, comment },
+      { skipSend }
+    );
+
+    if (result.unsigned) {
+      // Return unsigned transaction for external wallet signing
+      return successResponse({
+        unsigned: true,
+        transaction: result.transaction,
+        message: result.message,
+        agentId: rawId,
+        score,
+        comment,
+        hint: 'Decode base64, sign with your wallet (Phantom, etc.), and broadcast to the network.',
+      });
+    }
+
+    // Return signed result
+    return successResponse({
+      unsigned: false,
+      signature: result.signature,
+      agentId: rawId,
+      score,
+      comment,
+    });
+  },
+
+  feedback_read: async (args: unknown) => {
+    const input = getArgs(args);
+    const agentId = readString(input, 'id', true);
+    const client = readString(input, 'client', true);
+    const index = parseBigIntInput(input.index, 'index');
+    const { chainPrefix } = parseChainParam(input);
+
+    let provider;
+    let rawId = agentId;
+
+    if (isValidGlobalId(agentId)) {
+      const parsed = parseGlobalId(agentId);
+      provider = globalState.chains.getByPrefix(parsed.prefix);
+      rawId = parsed.rawId;
+    } else if (chainPrefix) {
+      provider = globalState.chains.getByPrefix(chainPrefix as 'sol' | 'base' | 'eth' | 'arb' | 'poly' | 'op');
+    } else {
+      provider = globalState.chains.getDefault();
+    }
+
+    if (!provider) {
+      throw new Error('No chain provider available');
+    }
+
+    const feedback = await provider.getFeedback(rawId, client, index);
+    if (!feedback) {
+      throw new Error(`Feedback not found: agent=${rawId}, client=${client}, index=${index}`);
+    }
+
+    return successResponse(feedback);
+  },
+
+  feedback_list: async (args: unknown) => {
+    const input = getArgs(args);
+    const agentId = readString(input, 'id', true);
+    const client = readString(input, 'client');
+    const minScore = readNumber(input, 'minScore');
+    const maxScore = readNumber(input, 'maxScore');
+    const { chainPrefix } = parseChainParam(input);
+    const { limit, offset } = parsePagination(input);
+
+    let provider;
+    let rawId = agentId;
+
+    if (isValidGlobalId(agentId)) {
+      const parsed = parseGlobalId(agentId);
+      provider = globalState.chains.getByPrefix(parsed.prefix);
+      rawId = parsed.rawId;
+    } else if (chainPrefix) {
+      provider = globalState.chains.getByPrefix(chainPrefix as 'sol' | 'base' | 'eth' | 'arb' | 'poly' | 'op');
+    } else {
+      provider = globalState.chains.getDefault();
+    }
+
+    if (!provider) {
+      return successResponse({ feedbacks: [], total: 0, hasMore: false });
+    }
+
+    const result = await provider.listFeedbacks({
+      agentId: rawId,
+      client,
+      minScore,
+      maxScore,
+      limit,
+      offset,
+    });
+
+    return successResponse(result);
+  },
+};
+
+// Backward compatibility aliases
+export const feedbackAliases: Record<string, string> = {
+  sdk_give_feedback: 'feedback_give',
+  sdk_read_feedback: 'feedback_read',
+  sdk_read_all_feedback: 'feedback_list',
+};
