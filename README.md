@@ -2,19 +2,76 @@
 
 Multi-chain MCP server for the ERC-8004 Agent Registry Standard. Supports Solana and EVM chains (Ethereum, Base, Arbitrum, Polygon, Optimism).
 
-## Quick Start with Claude Code
+## Requirements
 
-Install the MCP server:
+- Node.js >= 20.0.0
+- npm or pnpm
+
+## Installation
+
+```bash
+npm install -g @quantulabs/8004-mcp
+```
+
+Or run directly without installing:
+
+```bash
+npx @quantulabs/8004-mcp
+```
+
+## Configuration
+
+Configuration is done via environment variables. You can set them in your shell, a `.env` file, or pass them when starting the server.
+
+### Environment Variables
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `DEFAULT_CHAIN` | Default chain: `sol`, `base`, `eth`, `arb`, `poly`, `op` | `sol` |
+| `NETWORK_MODE` | `testnet` or `mainnet` | `testnet` |
+| `SOLANA_RPC_TESTNET` | Solana devnet RPC URL | Public RPC |
+| `SOLANA_RPC_MAINNET` | Solana mainnet RPC URL | Public RPC |
+| `BASE_RPC_TESTNET` | Base Sepolia RPC URL | Public RPC |
+| `BASE_RPC_MAINNET` | Base mainnet RPC URL | Public RPC |
+| `ETH_RPC_TESTNET` | Ethereum Sepolia RPC URL | Public RPC |
+| `ETH_RPC_MAINNET` | Ethereum mainnet RPC URL | Public RPC |
+| `INDEXER_URL` | Indexer URL for faster queries | - |
+| `PINATA_JWT` | Pinata JWT for IPFS storage | - |
+
+### Example
+
+```bash
+# Using environment variables
+DEFAULT_CHAIN=sol NETWORK_MODE=testnet npx @quantulabs/8004-mcp
+
+# Or export them
+export DEFAULT_CHAIN=base
+export NETWORK_MODE=mainnet
+export BASE_RPC_MAINNET=https://my-rpc.example.com
+npx @quantulabs/8004-mcp
+```
+
+## Usage with Claude Code
+
+### Quick Start
 
 ```bash
 claude mcp add 8004-mcp -- npx @quantulabs/8004-mcp
 ```
 
-That's it! The MCP is now available in Claude Code.
+With configuration:
 
-## Usage Examples
+```bash
+claude mcp add 8004-mcp \
+  -e DEFAULT_CHAIN=sol \
+  -e NETWORK_MODE=testnet \
+  -e PINATA_JWT=your-jwt \
+  -- npx @quantulabs/8004-mcp
+```
 
-### Search for AI agents
+### Examples
+
+#### Search for AI agents
 
 ```
 > Find trading agents on Solana with good reputation
@@ -27,7 +84,7 @@ Found 5 agents matching "trading":
 ...
 ```
 
-### Get agent details
+#### Get agent details
 
 ```
 > Show me details about agent sol:7xKXtG8vN2...
@@ -42,7 +99,7 @@ Agent: AlphaTrader
 - MCP Endpoint: https://alpha.trading/mcp
 ```
 
-### Check agent reputation
+#### Check agent reputation
 
 ```
 > What's the reputation of sol:7xKXtG8vN2...?
@@ -56,7 +113,7 @@ Total Feedbacks: 156
 Positive Rate: 94%
 ```
 
-### Submit feedback
+#### Submit feedback
 
 ```
 > Give a score of 90 to agent sol:7xKXtG8vN2... with comment "Fast execution"
@@ -68,7 +125,7 @@ Feedback submitted successfully!
 Transaction: 4xR7m...
 ```
 
-### Register a new agent
+#### Register a new agent
 
 ```
 > Register a new agent called "MyBot" with MCP endpoint https://mybot.com/mcp
@@ -83,7 +140,7 @@ Agent registered!
 - Transaction: 5tY8n...
 ```
 
-### Manage wallets
+#### Manage wallets
 
 ```
 > Create a new Solana wallet called "trading-wallet"
@@ -98,7 +155,7 @@ Wallet created:
 Fund this address to start using it for transactions.
 ```
 
-### Switch networks
+#### Switch networks
 
 ```
 > Switch to mainnet
@@ -110,55 +167,6 @@ Switched to mainnet. Active chains:
 - Base: mainnet (chainId: 8453)
 - Ethereum: mainnet (chainId: 1)
 ```
-
-## Installation
-
-### NPM
-
-```bash
-npm install -g @quantulabs/8004-mcp
-```
-
-### Run directly
-
-```bash
-npx @quantulabs/8004-mcp
-```
-
-## Configuration
-
-All configuration is done via the `claude mcp add` command using `-e` flags:
-
-```bash
-# Basic setup (defaults to Solana testnet)
-claude mcp add 8004-mcp -- npx @quantulabs/8004-mcp
-
-# With custom chain and network
-claude mcp add 8004-mcp \
-  -e DEFAULT_CHAIN=base \
-  -e NETWORK_MODE=mainnet \
-  -- npx @quantulabs/8004-mcp
-
-# With custom RPC and IPFS
-claude mcp add 8004-mcp \
-  -e DEFAULT_CHAIN=sol \
-  -e SOLANA_RPC_TESTNET=https://my-rpc.com \
-  -e PINATA_JWT=your-jwt \
-  -- npx @quantulabs/8004-mcp
-```
-
-### Available Options
-
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `DEFAULT_CHAIN` | Default chain: `sol`, `base`, `eth`, `arb`, `poly`, `op` | `sol` |
-| `NETWORK_MODE` | `testnet` or `mainnet` | `testnet` |
-| `SOLANA_RPC_TESTNET` | Solana devnet RPC | Public RPC |
-| `SOLANA_RPC_MAINNET` | Solana mainnet RPC | Public RPC |
-| `BASE_RPC_TESTNET` | Base Sepolia RPC | Public RPC |
-| `BASE_RPC_MAINNET` | Base mainnet RPC | Public RPC |
-| `INDEXER_URL` | Indexer for faster queries | - |
-| `PINATA_JWT` | Pinata JWT for IPFS | - |
 
 ## Features
 
