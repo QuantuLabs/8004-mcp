@@ -64,6 +64,11 @@ import {
   writeOperationHandlers,
   writeOperationAliases,
 } from './unified/write-operations.js';
+import {
+  x402Tools,
+  x402Handlers,
+  x402Aliases,
+} from './unified/x402.js';
 
 // Solana-specific tools
 import { createAtomTools } from '../chains/solana/tools/atom.js';
@@ -85,6 +90,7 @@ export const unifiedTools: Tool[] = [
   ...unifiedWalletTools,
   ...registrationTools,
   ...writeOperationTools,
+  ...x402Tools,
 ];
 
 // All unified handlers
@@ -101,6 +107,7 @@ export const unifiedHandlers: Record<string, (args: unknown) => Promise<unknown>
   ...unifiedWalletHandlers,
   ...registrationHandlers,
   ...writeOperationHandlers,
+  ...x402Handlers,
 };
 
 // All unified aliases
@@ -117,6 +124,7 @@ export const unifiedAliases: Record<string, string> = {
   ...unifiedWalletAliases,
   ...registrationAliases,
   ...writeOperationAliases,
+  ...x402Aliases,
 };
 
 // Register all unified tools to a registry

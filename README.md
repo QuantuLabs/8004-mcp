@@ -114,6 +114,23 @@ Feedback submitted successfully!
 Transaction: 4xR7m...
 ```
 
+#### x402 Payment Integration
+
+Submit feedback with proof-of-payment from x402 transactions:
+
+```
+> Submit x402 feedback for agent sol:7xKXtG8vN2... with payment proof
+
+Using x402_feedback_submit...
+
+Feedback submitted with proof-of-payment:
+- Score: 85
+- Tag: x402-resource-delivered
+- Proof: txHash 5xR7m... verified
+- Stored on IPFS: ipfs://QmXyz...
+- Transaction: 6tY8n...
+```
+
 #### Register a new agent
 
 ```
@@ -173,6 +190,113 @@ Examples:
 - `base:8453:123`
 - `eth:1:456`
 
+## x402 Protocol Integration
+
+The MCP supports the x402 payment protocol extension for reputation (`8004-reputation`). This allows linking feedback to actual payment transactions, creating verifiable proof-of-payment reputation.
+
+### How it works
+
+1. **Server announces identity**: When returning 402 Payment Required, include agent identity in CAIP-2 format
+2. **Client pays**: Standard x402 payment flow
+3. **Feedback with proof**: Both parties can submit feedback linked to the payment transaction
+
+### Example: Connecting to 8004-mcp
+
+```javascript
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
+import { spawn } from 'child_process';
+
+// Start the MCP server
+const server = spawn('npx', ['@quantulabs/8004-mcp'], {
+  stdio: ['pipe', 'pipe', 'inherit'],
+});
+
+const transport = new StdioClientTransport({
+  reader: server.stdout,
+  writer: server.stdin,
+});
+
+const mcpClient = new Client(
+  { name: 'my-app', version: '1.0.0' },
+  { capabilities: {} }
+);
+
+await mcpClient.connect(transport);
+```
+
+### Example: Server-side (announcing identity)
+
+```javascript
+// Build identity for PaymentRequired response
+const result = await mcpClient.callTool({
+  name: 'x402_identity_build',
+  arguments: { agentId: 'sol:AgentPubkey...' }
+});
+
+const identity = JSON.parse(result.content[0].text);
+// Returns: { identity: { agentRegistry: "solana:EtWTRA...:HHCVWc...", agentId: "..." } }
+
+// Add to PaymentRequired headers
+const paymentRequired = {
+  ...standardX402Fields,
+  extensions: {
+    '8004-reputation': identity.identity
+  }
+};
+```
+
+### Example: Client-side (submitting feedback)
+
+```javascript
+// After receiving PaymentResponse, parse the proof
+const proofResult = await mcpClient.callTool({
+  name: 'x402_proof_parse',
+  arguments: { paymentResponse: base64EncodedPaymentResponse }
+});
+
+const proof = JSON.parse(proofResult.content[0].text);
+
+// Submit feedback with proof
+await mcpClient.callTool({
+  name: 'x402_feedback_submit',
+  arguments: {
+    agentId: 'sol:AgentPubkey...',
+    score: 85,
+    tag1: 'x402-resource-delivered',
+    tag2: 'exact-svm',
+    endpoint: 'https://agent.example.com/api',
+    proofOfPayment: proof.proofOfPayment,
+    storeOnIpfs: true
+  }
+});
+```
+
+### Feedback File (IPFS)
+
+When `storeOnIpfs: true`, the complete feedback is stored on IPFS:
+
+```json
+{
+  "agentRegistry": "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1:HHCVWcqs...",
+  "agentId": "AgentPubkey...",
+  "clientAddress": "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1:ClientPubkey...",
+  "createdAt": "2026-01-23T12:00:00Z",
+  "score": 85,
+  "tag1": "x402-resource-delivered",
+  "tag2": "exact-svm",
+  "endpoint": "https://agent.example.com/api",
+  "proofOfPayment": {
+    "fromAddress": "ClientPubkey...",
+    "toAddress": "AgentPubkey...",
+    "chainId": "EtWTRABZaYq6iMfeYKouRu166VU2xqa1",
+    "txHash": "5xR7mN2k..."
+  }
+}
+```
+
+See [TOOLS.md](./TOOLS.md#x402-protocol-integration) for more details on x402 tools.
+
 ## Development
 
 ```bash
@@ -182,6 +306,45 @@ npm install
 npm run build
 npm test
 ```
+
+## Adding Your Registry
+
+> **Note:** Registries supported by the [8004-solana SDK](https://github.com/QuantuLabs/8004-solana) and [agent0-ts SDK](https://github.com/agent0lab/agent0-ts) are automatically included in this MCP. No action needed for those chains.
+
+Want to add your own ERC-8004 compatible registry to the MCP? [Open an issue on GitHub](https://github.com/QuantuLabs/8004-mcp/issues/new?template=registry-request.md) with the following requirements:
+
+### Requirements
+
+1. **Open Source**: Your registry must be public and open source
+   - Provide link to your GitHub repository
+
+2. **Indexer**: Provide an open source indexer or equivalent data access method
+   - We need a way to query agents efficiently
+   - Subgraph, REST API, or RPC-based indexing supported
+
+3. **Documentation**: Complete API documentation including:
+   - All contract methods and events
+   - Data structures and types
+   - Example requests/responses
+
+4. **API Compatibility**: We recommend following the [8004-solana SDK](https://github.com/QuantuLabs/8004-solana) API patterns:
+   - `getAgent(id)` - Get agent details
+   - `agentExists(id)` - Check existence
+   - `searchAgents(params)` - Search with filters
+   - `giveFeedback(input)` - Submit feedback
+   - `getFeedback(agentId, client, index)` - Read feedback
+   - `listFeedbacks(query)` - List feedbacks
+   - `getReputationSummary(id)` - Get reputation
+
+### How to Submit
+
+[Open an issue](https://github.com/QuantuLabs/8004-mcp/issues/new) with:
+- Link to your registry repository (public, open source)
+- Link to your indexer or data source (open source)
+- Link to API documentation
+- Contract addresses (testnet and/or mainnet)
+
+We review submissions regularly and will provide feedback.
 
 ## License
 

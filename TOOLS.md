@@ -16,6 +16,7 @@ Complete list of all MCP tools available in @quantulabs/8004-mcp.
 | IPFS | `ipfs_*` |
 | OASF | `oasf_*` |
 | Crawler | `crawler_*` |
+| x402 Protocol | `x402_*` |
 | Solana-specific | `solana_*` |
 | EVM-specific | `evm_*` |
 
@@ -154,6 +155,57 @@ Complete list of all MCP tools available in @quantulabs/8004-mcp.
 |------|-------------|
 | `evm_agent_wallet_set` | Set operational wallet (EIP-712) |
 | `evm_agent_wallet_unset` | Remove operational wallet |
+
+## x402 Protocol Integration
+
+Tools for integrating ERC-8004 agent reputation with the x402 payment protocol.
+
+| Tool | Description |
+|------|-------------|
+| `x402_identity_build` | Build AgentIdentity for PaymentRequired responses (CAIP-2 format) |
+| `x402_proof_parse` | Parse PaymentResponse header and extract proof-of-payment |
+| `x402_feedback_submit` | Submit feedback with proof-of-payment, stores on IPFS |
+
+### x402 Tags
+
+**Client → Server (tag1):**
+- `x402-resource-delivered` - Service was delivered successfully
+- `x402-delivery-failed` - Service delivery failed
+- `x402-delivery-timeout` - Service timed out
+- `x402-quality-issue` - Quality issues with delivery
+
+**Server → Client (tag1):**
+- `x402-good-payer` - Client paid successfully
+- `x402-payment-failed` - Payment transaction failed
+- `x402-insufficient-funds` - Client had insufficient funds
+
+**Network (tag2):**
+- `exact-evm` - EVM-based networks (Ethereum, Base, etc.)
+- `exact-svm` - Solana Virtual Machine
+
+### Example Flow
+
+```javascript
+// 1. Server: Build identity for PaymentRequired response
+const identity = await x402_identity_build({ agentId: "sol:AgentPubkey..." });
+// Returns: { agentRegistry: "solana:EtWTRA...:HHCVWc...", agentId: "AgentPubkey..." }
+
+// 2. Client: Parse PaymentResponse after payment
+const proof = await x402_proof_parse({ paymentResponse: "eyJ0eEhhc2gi..." });
+// Returns: { proofOfPayment: { fromAddress, toAddress, chainId, txHash }, settlement: {...} }
+
+// 3. Client: Submit feedback with proof
+await x402_feedback_submit({
+  agentId: "sol:AgentPubkey...",
+  score: 85,
+  tag1: "x402-resource-delivered",
+  tag2: "exact-svm",
+  endpoint: "https://agent.example.com/api",
+  proofOfPayment: proof.proofOfPayment,
+  storeOnIpfs: true,
+  validateProof: false
+});
+```
 
 ## Global ID Format
 
