@@ -53,8 +53,8 @@ Configuration is done via environment variables.
 # Inline
 DEFAULT_CHAIN=sol NETWORK_MODE=testnet npx @quantulabs/8004-mcp
 
-# From a .env file
-env $(cat .env | xargs) npx @quantulabs/8004-mcp
+# From a .env file (values stay hidden)
+set -a && source .env && set +a && npx @quantulabs/8004-mcp
 
 # Or export in your shell profile (~/.bashrc, ~/.zshrc)
 export DEFAULT_CHAIN=base
