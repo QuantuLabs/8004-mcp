@@ -127,35 +127,38 @@ npx @quantulabs/8004-mcp
 
 ## Configuration
 
-### Environment Variables
-
-```env
-# Default chain (sol, base, eth, arb, poly, op)
-DEFAULT_CHAIN=sol
-
-# Network mode (testnet or mainnet)
-NETWORK_MODE=testnet
-
-# Solana RPC
-SOLANA_RPC_MAINNET=https://api.mainnet-beta.solana.com
-SOLANA_RPC_TESTNET=https://api.devnet.solana.com
-
-# EVM RPCs (example: Base)
-BASE_RPC_MAINNET=https://mainnet.base.org
-BASE_RPC_TESTNET=https://sepolia.base.org
-
-# Indexer (optional, for faster queries)
-INDEXER_URL=https://indexer.8004.app
-
-# IPFS (optional, for metadata storage)
-PINATA_JWT=your-pinata-jwt
-```
-
-### Claude Code with environment variables
+All configuration is done via the `claude mcp add` command using `-e` flags:
 
 ```bash
-claude mcp add 8004-mcp -e DEFAULT_CHAIN=sol -e NETWORK_MODE=testnet -- npx @quantulabs/8004-mcp
+# Basic setup (defaults to Solana testnet)
+claude mcp add 8004-mcp -- npx @quantulabs/8004-mcp
+
+# With custom chain and network
+claude mcp add 8004-mcp \
+  -e DEFAULT_CHAIN=base \
+  -e NETWORK_MODE=mainnet \
+  -- npx @quantulabs/8004-mcp
+
+# With custom RPC and IPFS
+claude mcp add 8004-mcp \
+  -e DEFAULT_CHAIN=sol \
+  -e SOLANA_RPC_TESTNET=https://my-rpc.com \
+  -e PINATA_JWT=your-jwt \
+  -- npx @quantulabs/8004-mcp
 ```
+
+### Available Options
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `DEFAULT_CHAIN` | Default chain: `sol`, `base`, `eth`, `arb`, `poly`, `op` | `sol` |
+| `NETWORK_MODE` | `testnet` or `mainnet` | `testnet` |
+| `SOLANA_RPC_TESTNET` | Solana devnet RPC | Public RPC |
+| `SOLANA_RPC_MAINNET` | Solana mainnet RPC | Public RPC |
+| `BASE_RPC_TESTNET` | Base Sepolia RPC | Public RPC |
+| `BASE_RPC_MAINNET` | Base mainnet RPC | Public RPC |
+| `INDEXER_URL` | Indexer for faster queries | - |
+| `PINATA_JWT` | Pinata JWT for IPFS | - |
 
 ## Features
 
