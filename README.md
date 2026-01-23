@@ -161,21 +161,6 @@ Switched to mainnet. Active chains:
 
 See [TOOLS.md](./TOOLS.md) for the complete list of 60+ available tools.
 
-### Categories
-
-- **Configuration**: `config_*`, `network_*`
-- **Agents**: `agent_*`
-- **Feedback**: `feedback_*`
-- **Reputation**: `reputation_*`, `leaderboard_*`
-- **Collections**: `collection_*`
-- **Cache**: `cache_*`
-- **Wallets**: `wallet_*`
-- **IPFS**: `ipfs_*`
-- **OASF**: `oasf_*`
-- **Crawler**: `crawler_*`
-- **Solana-specific**: `solana_*`
-- **EVM-specific**: `evm_*`
-
 ## Global ID Format
 
 Agents are identified using global IDs:

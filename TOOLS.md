@@ -2,6 +2,25 @@
 
 Complete list of all MCP tools available in @quantulabs/8004-mcp.
 
+## Categories
+
+| Category | Prefix |
+|----------|--------|
+| Configuration | `config_*`, `network_*` |
+| Agents | `agent_*` |
+| Feedback | `feedback_*` |
+| Reputation | `reputation_*`, `leaderboard_*` |
+| Collections | `collection_*` |
+| Cache | `cache_*` |
+| Wallets | `wallet_*` |
+| IPFS | `ipfs_*` |
+| OASF | `oasf_*` |
+| Crawler | `crawler_*` |
+| Solana-specific | `solana_*` |
+| EVM-specific | `evm_*` |
+
+---
+
 ## Configuration
 
 | Tool | Description |
