@@ -30,7 +30,7 @@ npx @quantulabs/8004-mcp
 
 ## Configuration
 
-Configuration is done via environment variables. You can set them in your shell, a `.env` file, or pass them when starting the server.
+Configuration is done via environment variables.
 
 ### Environment Variables
 
@@ -47,13 +47,13 @@ Configuration is done via environment variables. You can set them in your shell,
 | `INDEXER_URL` | Indexer URL for faster queries | - |
 | `PINATA_JWT` | Pinata JWT for IPFS storage | - |
 
-### Example
+### Examples
 
 ```bash
-# Using environment variables
+# Inline
 DEFAULT_CHAIN=sol NETWORK_MODE=testnet npx @quantulabs/8004-mcp
 
-# Or export them
+# Or export in your shell (~/.bashrc, ~/.zshrc)
 export DEFAULT_CHAIN=base
 export NETWORK_MODE=mainnet
 export BASE_RPC_MAINNET=https://my-rpc.example.com
