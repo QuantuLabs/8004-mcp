@@ -30,37 +30,15 @@ npx @quantulabs/8004-mcp
 
 ## Configuration
 
-Configuration is done via environment variables.
-
-### Environment Variables
-
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `DEFAULT_CHAIN` | Default chain: `sol`, `base`, `eth`, `arb`, `poly`, `op` | `sol` |
-| `NETWORK_MODE` | `testnet` or `mainnet` | `testnet` |
-| `SOLANA_RPC_TESTNET` | Solana devnet RPC URL | Public RPC |
-| `SOLANA_RPC_MAINNET` | Solana mainnet RPC URL | Public RPC |
-| `BASE_RPC_TESTNET` | Base Sepolia RPC URL | Public RPC |
-| `BASE_RPC_MAINNET` | Base mainnet RPC URL | Public RPC |
-| `ETH_RPC_TESTNET` | Ethereum Sepolia RPC URL | Public RPC |
-| `ETH_RPC_MAINNET` | Ethereum mainnet RPC URL | Public RPC |
-| `INDEXER_URL` | Indexer URL for faster queries | - |
-| `PINATA_JWT` | Pinata JWT for IPFS storage | - |
-
-### Examples
+The MCP automatically loads a `.env` file from the current directory.
 
 ```bash
-# Inline
-DEFAULT_CHAIN=sol NETWORK_MODE=testnet npx @quantulabs/8004-mcp
-
-# From a .env file (values stay hidden)
-set -a && source .env && set +a && npx @quantulabs/8004-mcp
-
-# Or export in your shell profile (~/.bashrc, ~/.zshrc)
-export DEFAULT_CHAIN=base
-export NETWORK_MODE=mainnet
+cp .env.example .env
+# Edit .env with your values
 npx @quantulabs/8004-mcp
 ```
+
+See [.env.example](./.env.example) for all available options.
 
 ## Usage with Claude Code
 
