@@ -53,10 +53,12 @@ Configuration is done via environment variables.
 # Inline
 DEFAULT_CHAIN=sol NETWORK_MODE=testnet npx @quantulabs/8004-mcp
 
-# Or export in your shell (~/.bashrc, ~/.zshrc)
+# From a .env file
+env $(cat .env | xargs) npx @quantulabs/8004-mcp
+
+# Or export in your shell profile (~/.bashrc, ~/.zshrc)
 export DEFAULT_CHAIN=base
 export NETWORK_MODE=mainnet
-export BASE_RPC_MAINNET=https://my-rpc.example.com
 npx @quantulabs/8004-mcp
 ```
 
