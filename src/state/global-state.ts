@@ -3,6 +3,7 @@
 import { ChainRegistry } from '../core/registry/chain-registry.js';
 import { ToolRegistry } from '../core/registry/tool-registry.js';
 import { AgentCache } from '../core/cache/agent-cache.js';
+import { IPFSService } from '../core/services/ipfs-service.js';
 import type { IChainProvider } from '../core/interfaces/chain-provider.js';
 import type { IEnvConfig } from '../config/env.js';
 import { loadEnvConfig } from '../config/env.js';
@@ -51,6 +52,12 @@ export interface IGlobalStateSnapshot {
     byChain: Record<string, number>;
     dbSize: string;
   };
+  ipfs: {
+    configured: boolean;
+    hasPinata: boolean;
+    hasIpfsNode: boolean;
+    hasFilecoin: boolean;
+  };
   crawlerTimeoutMs: number;
 }
 
@@ -61,6 +68,7 @@ class GlobalState {
   private _toolRegistry: ToolRegistry;
   private _cache: AgentCache | null = null;
   private _crawlerTimeoutMs: number;
+  private _ipfsService: IPFSService;
   private _initialized = false;
 
   constructor() {
@@ -68,7 +76,19 @@ class GlobalState {
     this._networkMode = DEFAULT_NETWORK_MODE;
     this._chainRegistry = new ChainRegistry();
     this._toolRegistry = new ToolRegistry();
+    this._ipfsService = new IPFSService();
     this._crawlerTimeoutMs = this._config.crawlerTimeoutMs;
+
+    // Initialize IPFS from env config if available
+    if (this._config.ipfs?.pinataJwt || this._config.ipfs?.ipfsUrl) {
+      this._ipfsService.configure({
+        pinataJwt: this._config.ipfs.pinataJwt,
+        pinataEnabled: !!this._config.ipfs.pinataJwt,
+        url: this._config.ipfs.ipfsUrl,
+        filecoinPinEnabled: this._config.ipfs.filecoinEnabled,
+        filecoinPrivateKey: this._config.ipfs.filecoinPrivateKey,
+      });
+    }
   }
 
   // Network mode
@@ -139,6 +159,18 @@ class GlobalState {
     this._networkMode = DEFAULT_NETWORK_MODE;
     this._crawlerTimeoutMs = this._config.crawlerTimeoutMs;
     this._chainRegistry.invalidateAll();
+
+    // Reset IPFS from env config
+    this._ipfsService.clearConfig();
+    if (this._config.ipfs?.pinataJwt || this._config.ipfs?.ipfsUrl) {
+      this._ipfsService.configure({
+        pinataJwt: this._config.ipfs.pinataJwt,
+        pinataEnabled: !!this._config.ipfs.pinataJwt,
+        url: this._config.ipfs.ipfsUrl,
+        filecoinPinEnabled: this._config.ipfs.filecoinEnabled,
+        filecoinPrivateKey: this._config.ipfs.filecoinPrivateKey,
+      });
+    }
   }
 
   // Crawler timeout
@@ -157,6 +189,11 @@ class GlobalState {
 
   get tools(): ToolRegistry {
     return this._toolRegistry;
+  }
+
+  // Global IPFS service
+  get ipfs(): IPFSService {
+    return this._ipfsService;
   }
 
   // Cache
@@ -229,6 +266,7 @@ class GlobalState {
     const chains = this._chainRegistry.getAll();
     const defaultChain = this._chainRegistry.getDefault();
     const cacheStats = this._cache?.getStats() ?? { total: 0, byChain: {}, dbSize: '0 B', lastSync: {} };
+    const ipfsConfig = this._ipfsService.getConfig();
 
     return {
       config: this._config,
@@ -246,6 +284,12 @@ class GlobalState {
         total: cacheStats.total,
         byChain: cacheStats.byChain,
         dbSize: cacheStats.dbSize,
+      },
+      ipfs: {
+        configured: this._ipfsService.isConfigured(),
+        hasPinata: !!ipfsConfig?.pinataJwt,
+        hasIpfsNode: !!ipfsConfig?.url,
+        hasFilecoin: !!ipfsConfig?.filecoinPinEnabled,
       },
       crawlerTimeoutMs: this._crawlerTimeoutMs,
     };

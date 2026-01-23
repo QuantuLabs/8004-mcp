@@ -1,10 +1,11 @@
 // Solana runtime state management
 
 import { Keypair } from '@solana/web3.js';
-import { SolanaSDK, IndexerClient, IPFSClient } from '8004-solana';
+import { SolanaSDK, IndexerClient, type IPFSClient } from '8004-solana';
 import type { IPFSClientConfig } from '8004-solana';
 import { DEFAULT_SOLANA_CLUSTER, DEFAULT_INDEXER_URL, DEFAULT_INDEXER_API_KEY } from '../../config/defaults.js';
 import { getWalletManager } from '../../core/wallet/index.js';
+import { globalState } from '../../state/global-state.js';
 
 // Note: 8004-solana SDK currently only supports 'devnet'
 export type SolanaCluster = 'devnet';
@@ -80,9 +81,7 @@ export function parseKeypairFromEnv(privateKey?: string): Keypair | undefined {
 // Solana state manager (per-instance, not singleton)
 export class SolanaStateManager {
   private _config: ISolanaConfig;
-  private _ipfsConfig?: IPFSClientConfig;
   private _sdk?: SolanaSDK;
-  private _ipfs?: IPFSClient;
   private _indexer?: IndexerClient;
   private _keypair?: Keypair;
 
@@ -104,8 +103,8 @@ export class SolanaStateManager {
   }
 
   setIpfsConfig(config: IPFSClientConfig): void {
-    this._ipfsConfig = config;
-    this._ipfs = undefined;
+    // Delegate to global IPFS service for multi-chain compatibility
+    globalState.ipfs.configure(config);
   }
 
   // Keypair management - supports both env-based and wallet manager
@@ -175,19 +174,15 @@ export class SolanaStateManager {
     return this._indexer;
   }
 
-  // IPFS access
+  // IPFS access - delegates to global service for multi-chain compatibility
   getIpfs(): IPFSClient {
-    if (!this._ipfsConfig) {
-      throw new Error('IPFS not configured. Call setIpfsConfig() first.');
-    }
-    if (!this._ipfs) {
-      this._ipfs = new IPFSClient(this._ipfsConfig);
-    }
-    return this._ipfs;
+    // Use global IPFS service
+    return globalState.ipfs.getClient();
   }
 
   hasIpfs(): boolean {
-    return this._ipfsConfig !== undefined;
+    // Delegate to global IPFS service
+    return globalState.ipfs.isConfigured();
   }
 
   // Async initialization check

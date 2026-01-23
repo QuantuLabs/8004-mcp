@@ -1,4 +1,4 @@
-// Unified IPFS tools
+// Unified IPFS tools - Uses global IPFS service (chain-agnostic)
 
 import type { Tool } from '@modelcontextprotocol/sdk/types.js';
 import {
@@ -9,7 +9,6 @@ import {
 } from '../../core/parsers/common.js';
 import { successResponse } from '../../core/serializers/common.js';
 import { globalState } from '../../state/global-state.js';
-import type { SolanaChainProvider } from '../../chains/solana/provider.js';
 import type { IPFSClientConfig } from '8004-solana';
 
 export const ipfsTools: Tool[] = [
@@ -107,13 +106,10 @@ export const ipfsHandlers: Record<string, (args: unknown) => Promise<unknown>> =
       filecoinPrivateKey,
     };
 
-    // Apply to Solana provider if available
-    const solanaProvider = globalState.chains.getByPrefix('sol') as SolanaChainProvider | null;
-    if (solanaProvider) {
-      solanaProvider.getState().setIpfsConfig(config);
-    }
+    // Configure global IPFS service (chain-agnostic)
+    globalState.ipfs.configure(config);
 
-    // Also store in global config
+    // Also store in global config for persistence
     globalState.setConfig({
       ipfs: {
         pinataJwt,
@@ -135,18 +131,11 @@ export const ipfsHandlers: Record<string, (args: unknown) => Promise<unknown>> =
     const input = getArgs(args);
     const data = readRecord(input, 'data', true);
 
-    const solanaProvider = globalState.chains.getByPrefix('sol') as SolanaChainProvider | null;
-    if (!solanaProvider) {
-      throw new Error('Solana provider not available');
-    }
-
-    const state = solanaProvider.getState();
-    if (!state.hasIpfs()) {
+    if (!globalState.ipfs.isConfigured()) {
       throw new Error('IPFS not configured. Call ipfs_configure first.');
     }
 
-    const ipfs = state.getIpfs();
-    const cid = await ipfs.addJson(data);
+    const cid = await globalState.ipfs.addJson(data);
 
     return successResponse({
       cid,
@@ -158,18 +147,11 @@ export const ipfsHandlers: Record<string, (args: unknown) => Promise<unknown>> =
     const input = getArgs(args);
     const registration = readRecord(input, 'registration', true);
 
-    const solanaProvider = globalState.chains.getByPrefix('sol') as SolanaChainProvider | null;
-    if (!solanaProvider) {
-      throw new Error('Solana provider not available');
-    }
-
-    const state = solanaProvider.getState();
-    if (!state.hasIpfs()) {
+    if (!globalState.ipfs.isConfigured()) {
       throw new Error('IPFS not configured. Call ipfs_configure first.');
     }
 
-    const ipfs = state.getIpfs();
-    const cid = await ipfs.addJson(registration);
+    const cid = await globalState.ipfs.addJson(registration);
 
     return successResponse({
       cid,
@@ -182,18 +164,11 @@ export const ipfsHandlers: Record<string, (args: unknown) => Promise<unknown>> =
     const input = getArgs(args);
     const cid = readString(input, 'cid', true);
 
-    const solanaProvider = globalState.chains.getByPrefix('sol') as SolanaChainProvider | null;
-    if (!solanaProvider) {
-      throw new Error('Solana provider not available');
-    }
-
-    const state = solanaProvider.getState();
-    if (!state.hasIpfs()) {
+    if (!globalState.ipfs.isConfigured()) {
       throw new Error('IPFS not configured. Call ipfs_configure first.');
     }
 
-    const ipfs = state.getIpfs();
-    const registration = await ipfs.getJson(cid);
+    const registration = await globalState.ipfs.getJson(cid);
 
     return successResponse(registration);
   },

@@ -98,6 +98,8 @@ Complete list of all MCP tools available in @quantulabs/8004-mcp.
 
 ## IPFS
 
+IPFS is a global service (chain-agnostic). Configure once, use with any chain.
+
 | Tool | Description |
 |------|-------------|
 | `ipfs_configure` | Configure IPFS client (Pinata, Filecoin, or node) |
@@ -164,7 +166,8 @@ Tools for integrating ERC-8004 agent reputation with the x402 payment protocol.
 |------|-------------|
 | `x402_identity_build` | Build AgentIdentity for PaymentRequired responses (CAIP-2 format) |
 | `x402_proof_parse` | Parse PaymentResponse header and extract proof-of-payment |
-| `x402_feedback_submit` | Submit feedback with proof-of-payment, stores on IPFS |
+| `x402_feedback_build` | Build feedback file for manual storage (IPFS, Arweave, etc.) |
+| `x402_feedback_submit` | Submit feedback on-chain with feedbackUri or auto-store on IPFS |
 
 ### x402 Tags
 
@@ -183,18 +186,23 @@ Tools for integrating ERC-8004 agent reputation with the x402 payment protocol.
 - `exact-evm` - EVM-based networks (Ethereum, Base, etc.)
 - `exact-svm` - Solana Virtual Machine
 
-### Example Flow
+### Example Flows
+
+#### Option A: Auto-store on IPFS (requires `ipfs_configure`)
 
 ```javascript
-// 1. Server: Build identity for PaymentRequired response
+// 1. Configure IPFS (once per session)
+await ipfs_configure({ pinataJwt: "your-jwt-token" });
+
+// 2. Server: Build identity for PaymentRequired response
 const identity = await x402_identity_build({ agentId: "sol:AgentPubkey..." });
 // Returns: { agentRegistry: "solana:EtWTRA...:HHCVWc...", agentId: "AgentPubkey..." }
 
-// 2. Client: Parse PaymentResponse after payment
+// 3. Client: Parse PaymentResponse after payment
 const proof = await x402_proof_parse({ paymentResponse: "eyJ0eEhhc2gi..." });
 // Returns: { proofOfPayment: { fromAddress, toAddress, chainId, txHash }, settlement: {...} }
 
-// 3. Client: Submit feedback with proof
+// 4. Submit feedback (auto-stores on IPFS)
 await x402_feedback_submit({
   agentId: "sol:AgentPubkey...",
   score: 85,
@@ -202,8 +210,35 @@ await x402_feedback_submit({
   tag2: "exact-svm",
   endpoint: "https://agent.example.com/api",
   proofOfPayment: proof.proofOfPayment,
-  storeOnIpfs: true,
-  validateProof: false
+  storeOnIpfs: true
+});
+```
+
+#### Option B: Manual storage with `feedbackUri`
+
+```javascript
+// 1. Build feedback file
+const result = await x402_feedback_build({
+  agentId: "base:84532:123",
+  score: 90,
+  tag1: "x402-resource-delivered",
+  tag2: "exact-evm",
+  endpoint: "https://agent.example.com/api",
+  proofOfPayment: { txHash: "0x...", fromAddress: "0x...", toAddress: "0x...", chainId: "84532" }
+});
+// Returns: { feedbackFile: {...}, feedbackHash: "0x35d6439b..." }
+
+// 2. Store the file yourself (Arweave, your own IPFS, HTTP server, etc.)
+const feedbackUri = "ar://abc123..."; // or "ipfs://Qm...", "https://..."
+
+// 3. Submit with your URI
+await x402_feedback_submit({
+  agentId: "base:84532:123",
+  score: 90,
+  tag1: "x402-resource-delivered",
+  proofOfPayment: result.feedbackFile.proofOfPayment,
+  feedbackUri: feedbackUri,  // Your storage URI
+  storeOnIpfs: false
 });
 ```
 

@@ -15,7 +15,6 @@ import { globalState } from '../../state/global-state.js';
 import { parseGlobalId, isValidGlobalId } from '../../core/interfaces/agent.js';
 import type { IWritableChainProvider } from '../../core/interfaces/chain-provider.js';
 import { isWritableProvider } from '../../core/interfaces/chain-provider.js';
-import type { SolanaChainProvider } from '../../chains/solana/provider.js';
 import {
   buildRegistryIdentifier,
   buildClientAddress,
@@ -67,9 +66,69 @@ export const x402Tools: Tool[] = [
     },
   },
   {
+    name: 'x402_feedback_build',
+    description:
+      'Build x402 feedback file without submitting. Use this to get the file content for manual storage (IPFS, HTTP, etc.) before calling x402_feedback_submit with feedbackUri.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        agentId: {
+          type: 'string',
+          description:
+            'Agent ID (global format like sol:xxx or base:8453:123)',
+        },
+        score: {
+          type: 'number',
+          description: 'Feedback score (0-100)',
+        },
+        tag1: {
+          type: 'string',
+          description:
+            'Primary tag (e.g., x402-resource-delivered, x402-good-payer)',
+        },
+        tag2: {
+          type: 'string',
+          description: 'Secondary tag (e.g., exact-svm, exact-evm)',
+        },
+        endpoint: {
+          type: 'string',
+          description: 'Agent endpoint that was called',
+        },
+        proofOfPayment: {
+          type: 'object',
+          description: 'Proof of payment object',
+          properties: {
+            fromAddress: { type: 'string', description: 'Payer address' },
+            toAddress: { type: 'string', description: 'Payee address' },
+            chainId: { type: 'string', description: 'Chain ID or genesis hash' },
+            txHash: { type: 'string', description: 'Transaction hash/signature' },
+          },
+          required: ['fromAddress', 'toAddress', 'chainId', 'txHash'],
+        },
+        x402Settlement: {
+          type: 'object',
+          description: 'Optional settlement details',
+        },
+        comment: {
+          type: 'string',
+          description: 'Optional feedback comment',
+        },
+        signer: {
+          type: 'string',
+          description: 'Client address (defaults to proofOfPayment.fromAddress)',
+        },
+        chain: {
+          type: 'string',
+          description: 'Chain override (optional if using global ID)',
+        },
+      },
+      required: ['agentId', 'score', 'tag1', 'tag2', 'proofOfPayment'],
+    },
+  },
+  {
     name: 'x402_feedback_submit',
     description:
-      'Submit feedback with proof-of-payment (x402 extension). Stores on IPFS and records on-chain.',
+      'Submit feedback with proof-of-payment (x402 extension). Requires feedbackUri (use x402_feedback_build + ipfs_add_json first) OR storeOnIpfs=true with IPFS configured.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -132,13 +191,19 @@ export const x402Tools: Tool[] = [
           type: 'string',
           description: 'Optional feedback comment',
         },
+        feedbackUri: {
+          type: 'string',
+          description:
+            'URI where feedback file is stored (ipfs://, https://, ar://). If provided, skips IPFS upload.',
+        },
         validateProof: {
           type: 'boolean',
           description: 'Validate proof on-chain (default: false)',
         },
         storeOnIpfs: {
           type: 'boolean',
-          description: 'Store feedback file on IPFS (default: true)',
+          description:
+            'Store feedback file on IPFS (default: true). Requires IPFS configured if feedbackUri not provided.',
         },
         skipSend: {
           type: 'boolean',
@@ -300,6 +365,117 @@ export const x402Handlers: Record<
     });
   },
 
+  x402_feedback_build: async (args: unknown) => {
+    const input = getArgs(args);
+    const agentId = readString(input, 'agentId', true);
+    const score = readNumber(input, 'score', true);
+    const tag1 = readString(input, 'tag1', true);
+    const tag2 = readString(input, 'tag2', true);
+    const endpoint = readString(input, 'endpoint');
+    const comment = readString(input, 'comment');
+    const proofInput = readRecord(input, 'proofOfPayment', true);
+    const settlementInput = readRecord(input, 'x402Settlement');
+    const signer = readString(input, 'signer');
+    const { chainPrefix } = parseChainParam(input);
+
+    // Validate score
+    if (score < 0 || score > 100) {
+      throw new Error('Score must be between 0 and 100');
+    }
+
+    // Parse proof of payment
+    const proofOfPayment: X402ProofOfPayment = {
+      fromAddress: String(proofInput.fromAddress ?? ''),
+      toAddress: String(proofInput.toAddress ?? ''),
+      chainId: String(proofInput.chainId ?? ''),
+      txHash: String(proofInput.txHash ?? ''),
+    };
+
+    // Validate proof format
+    const formatValidation = isProofFormatValid(proofOfPayment);
+    if (!formatValidation.valid) {
+      throw new Error(
+        `Invalid proof format: ${formatValidation.errors.join(', ')}`
+      );
+    }
+
+    // Parse settlement if provided
+    let x402Settlement: X402Settlement | undefined;
+    if (settlementInput) {
+      x402Settlement = {
+        success: settlementInput.success === true,
+        transaction: String(settlementInput.transaction ?? ''),
+        network: String(settlementInput.network ?? ''),
+        settledAt: String(settlementInput.settledAt ?? ''),
+      };
+    }
+
+    // Resolve provider for config
+    let provider;
+    let rawId = agentId;
+
+    if (isValidGlobalId(agentId)) {
+      const parsed = parseGlobalId(agentId);
+      provider = globalState.chains.getByPrefix(parsed.prefix);
+      rawId = parsed.rawId;
+    } else if (chainPrefix) {
+      provider = globalState.chains.getByPrefix(
+        chainPrefix as 'sol' | 'base' | 'eth' | 'arb' | 'poly' | 'op'
+      );
+    } else {
+      provider = globalState.chains.getDefault();
+    }
+
+    if (!provider) {
+      throw new Error('No chain provider available');
+    }
+
+    // Build feedback file
+    const config = provider.getConfig();
+    const networkMode = globalState.networkMode as NetworkMode;
+    const chainConfig = CHAIN_CONFIGS[config.chainPrefix];
+    const networkConfig =
+      networkMode === 'mainnet' ? chainConfig.mainnet : chainConfig.testnet;
+    const registryAddress = networkConfig.registries.identity;
+
+    // Get client address (signer or from proof)
+    const clientAddress = signer ?? proofOfPayment.fromAddress;
+
+    const feedbackFile: X402FeedbackFile = {
+      agentRegistry: buildRegistryIdentifier(
+        config.chainType,
+        networkConfig.chainId,
+        registryAddress
+      ),
+      agentId: rawId,
+      clientAddress: buildClientAddress(
+        config.chainType,
+        networkConfig.chainId,
+        clientAddress
+      ),
+      createdAt: new Date().toISOString(),
+      score,
+      tag1,
+      tag2,
+      endpoint,
+      proofOfPayment,
+      x402Settlement,
+      comment,
+    };
+
+    // Calculate feedback hash (SHA-256 of canonical JSON)
+    const feedbackJson = JSON.stringify(feedbackFile, Object.keys(feedbackFile).sort());
+    const feedbackHash = createHash('sha256')
+      .update(feedbackJson)
+      .digest('hex');
+
+    return successResponse({
+      feedbackFile: feedbackFileToRecord(feedbackFile),
+      feedbackHash: `0x${feedbackHash}`,
+      hint: 'Store this file on IPFS (ipfs_add_json) or HTTP, then call x402_feedback_submit with the feedbackUri.',
+    });
+  },
+
   x402_feedback_submit: async (args: unknown) => {
     const input = getArgs(args);
     const agentId = readString(input, 'agentId', true);
@@ -312,6 +488,7 @@ export const x402Handlers: Record<
     const settlementInput = readRecord(input, 'x402Settlement');
     const shouldValidateProof = readBoolean(input, 'validateProof') ?? false;
     const storeOnIpfs = readBoolean(input, 'storeOnIpfs') ?? true;
+    const providedFeedbackUri = readString(input, 'feedbackUri');
     const skipSend = readBoolean(input, 'skipSend') ?? false;
     const signer = readString(input, 'signer');
     const { chainPrefix } = parseChainParam(input);
@@ -389,7 +566,7 @@ export const x402Handlers: Record<
       }
     }
 
-    // Build feedback file for IPFS
+    // Build feedback file
     const config = provider.getConfig();
     const networkMode = globalState.networkMode as NetworkMode;
     const chainConfig = CHAIN_CONFIGS[config.chainPrefix];
@@ -429,16 +606,28 @@ export const x402Handlers: Record<
       .digest('hex');
     const feedbackHashBuffer = Buffer.from(feedbackHash, 'hex');
 
-    // Store on IPFS if enabled
-    let feedbackUri: string | undefined;
-    if (storeOnIpfs) {
-      const solanaProvider = globalState.chains.getByPrefix(
-        'sol'
-      ) as SolanaChainProvider | null;
-      if (solanaProvider && solanaProvider.getState().hasIpfs()) {
-        const ipfs = solanaProvider.getState().getIpfs();
-        const cid = await ipfs.addJson(feedbackFileToRecord(feedbackFile));
-        feedbackUri = `ipfs://${cid}`;
+    // Determine feedbackUri - user-provided takes priority
+    let feedbackUri: string | undefined = providedFeedbackUri;
+
+    // Store on IPFS if no feedbackUri provided and storeOnIpfs is enabled
+    if (!feedbackUri && storeOnIpfs) {
+      if (!globalState.ipfs.isConfigured()) {
+        throw new Error(
+          'IPFS not configured. Either: (1) call ipfs_configure first, (2) provide feedbackUri parameter, ' +
+          'or (3) use x402_feedback_build to get the file and store it yourself.'
+        );
+      }
+      const cid = await globalState.ipfs.addJson(feedbackFileToRecord(feedbackFile));
+      feedbackUri = `ipfs://${cid}`;
+    }
+
+    // Validate feedbackUri if provided
+    if (feedbackUri) {
+      const validPrefixes = ['ipfs://', 'https://', 'http://', 'ar://'];
+      if (!validPrefixes.some(p => feedbackUri!.startsWith(p))) {
+        throw new Error(
+          `Invalid feedbackUri format. Must start with: ${validPrefixes.join(', ')}`
+        );
       }
     }
 

@@ -257,7 +257,7 @@ const proofResult = await mcpClient.callTool({
 
 const proof = JSON.parse(proofResult.content[0].text);
 
-// Submit feedback with proof
+// Option A: Auto-store on IPFS (requires ipfs_configure first)
 await mcpClient.callTool({
   name: 'x402_feedback_submit',
   arguments: {
@@ -270,11 +270,44 @@ await mcpClient.callTool({
     storeOnIpfs: true
   }
 });
+
+// Option B: Manual storage - build file first, store yourself
+const buildResult = await mcpClient.callTool({
+  name: 'x402_feedback_build',
+  arguments: {
+    agentId: 'base:84532:123',
+    score: 90,
+    tag1: 'x402-resource-delivered',
+    proofOfPayment: proof.proofOfPayment
+  }
+});
+// Store buildResult.feedbackFile on Arweave, your IPFS, etc.
+const myUri = 'ar://abc123...';
+
+// Then submit with your URI
+await mcpClient.callTool({
+  name: 'x402_feedback_submit',
+  arguments: {
+    agentId: 'base:84532:123',
+    score: 90,
+    tag1: 'x402-resource-delivered',
+    proofOfPayment: proof.proofOfPayment,
+    feedbackUri: myUri,
+    storeOnIpfs: false
+  }
+});
 ```
 
-### Feedback File (IPFS)
+### Feedback File Storage
 
-When `storeOnIpfs: true`, the complete feedback is stored on IPFS:
+Feedback files **must** be stored for the x402 protocol. Two options:
+
+1. **Auto IPFS** (`storeOnIpfs: true`): Configure IPFS first with `ipfs_configure`, then feedback is automatically stored
+2. **Manual storage** (`feedbackUri`): Use `x402_feedback_build` to get the file, store it yourself (Arweave, your IPFS, HTTP), then pass the URI
+
+Supported URI schemes: `ipfs://`, `ar://`, `https://`, `http://`
+
+Example feedback file structure:
 
 ```json
 {
