@@ -160,10 +160,10 @@ export class WalletManager {
     // Overwrite EVM private key string (limited in JS, but try)
     if (wallet.evmPrivateKey) {
       // TypeScript won't let us mutate, but we can delete the reference
-      (wallet as Record<string, unknown>).evmPrivateKey = undefined;
+      (wallet as unknown as Record<string, unknown>).evmPrivateKey = undefined;
     }
     if (wallet.evmAccount) {
-      (wallet as Record<string, unknown>).evmAccount = undefined;
+      (wallet as unknown as Record<string, unknown>).evmAccount = undefined;
     }
   }
 
@@ -698,7 +698,7 @@ export class WalletManager {
   // Lock all wallets (securely wipes all memory)
   lockAll(): number {
     // Clear all timers and wipe memory
-    for (const [name, session] of this.walletSessions.entries()) {
+    for (const [, session] of this.walletSessions.entries()) {
       clearTimeout(session.timer);
       this.secureWipe(session.wallet);
     }
