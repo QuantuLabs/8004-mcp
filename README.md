@@ -19,6 +19,15 @@ Or run directly without installing:
 npx @quantulabs/8004-mcp
 ```
 
+## Features
+
+- **Multi-chain**: Solana + EVM (Base, Ethereum, Arbitrum, Polygon, Optimism)
+- **Unified API**: Same tools work across chains with automatic routing
+- **Wallet Management**: Encrypted local storage with auto-lock
+- **Local Cache**: SQLite with FTS5 for fast agent search
+- **ATOM Reputation**: Full integration with Solana's reputation system
+- **IPFS Support**: Pinata, Filecoin, or custom node
+
 ## Configuration
 
 Configuration is done via environment variables. You can set them in your shell, a `.env` file, or pass them when starting the server.
@@ -167,15 +176,6 @@ Switched to mainnet. Active chains:
 - Base: mainnet (chainId: 8453)
 - Ethereum: mainnet (chainId: 1)
 ```
-
-## Features
-
-- **Multi-chain**: Solana + EVM (Base, Ethereum, Arbitrum, Polygon, Optimism)
-- **Unified API**: Same tools work across chains with automatic routing
-- **Wallet Management**: Encrypted local storage with auto-lock
-- **Local Cache**: SQLite with FTS5 for fast agent search
-- **ATOM Reputation**: Full integration with Solana's reputation system
-- **IPFS Support**: Pinata, Filecoin, or custom node
 
 ## Tools
 
