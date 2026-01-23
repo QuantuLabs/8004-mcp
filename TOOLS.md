@@ -1,0 +1,150 @@
+# 8004-mcp Tools Reference
+
+Complete list of all MCP tools available in @quantulabs/8004-mcp.
+
+## Configuration
+
+| Tool | Description |
+|------|-------------|
+| `config_get` | Get current configuration |
+| `config_set` | Update configuration (chain, RPC, indexer settings) |
+| `config_reset` | Reset configuration from environment |
+| `network_get` | Get network status for all chains |
+| `network_set` | Switch between testnet and mainnet |
+
+## Agent Operations
+
+| Tool | Description |
+|------|-------------|
+| `agent_get` | Get agent details by ID |
+| `agent_exists` | Check if agent exists on-chain |
+| `agent_search` | Search agents with filters |
+| `agent_list_by_owner` | List all agents owned by an address |
+| `agent_register` | Register a new agent |
+| `agent_transfer` | Transfer agent ownership |
+| `agent_uri_update` | Update agent metadata URI |
+| `agent_metadata_set` | Set on-chain metadata key-value (Solana only) |
+
+## Feedback
+
+| Tool | Description |
+|------|-------------|
+| `feedback_give` | Submit feedback for an agent (requires signer) |
+| `feedback_read` | Read a single feedback by agent, client, and index |
+| `feedback_list` | List all feedbacks for an agent |
+| `feedback_revoke` | Revoke a previously given feedback |
+| `feedback_response_append` | Append a response to feedback (as agent owner) |
+
+## Reputation
+
+| Tool | Description |
+|------|-------------|
+| `reputation_get` | Get reputation summary (trust tier, quality score, stats) |
+| `leaderboard_get` | Get top agents ranked by reputation |
+
+## Collections
+
+| Tool | Description |
+|------|-------------|
+| `collection_get` | Get collection details by ID |
+| `collection_list` | List all collections |
+| `collection_agents` | List agents in a collection |
+| `collection_base_get` | Get the base/default collection |
+| `collection_create` | Create a new collection (Solana only) |
+| `collection_uri_update` | Update collection metadata URI |
+
+## Cache
+
+| Tool | Description |
+|------|-------------|
+| `cache_search` | Full-text search agents by name (FTS5) |
+| `cache_refresh` | Force refresh cache from indexers |
+| `cache_stats` | Get cache statistics |
+| `cache_sync_status` | Get detailed sync status per data source |
+
+## Wallet Management
+
+| Tool | Description |
+|------|-------------|
+| `wallet_list` | List all wallets with status |
+| `wallet_info` | Get detailed wallet information |
+| `wallet_create` | Create a new wallet (Solana or EVM) |
+| `wallet_import` | Import existing private key |
+| `wallet_unlock` | Unlock wallet for signing |
+| `wallet_lock` | Lock wallet (clear from memory) |
+| `wallet_export` | Export encrypted backup |
+| `wallet_delete` | Delete wallet permanently |
+| `wallet_change_password` | Change wallet password |
+
+## IPFS
+
+| Tool | Description |
+|------|-------------|
+| `ipfs_configure` | Configure IPFS client (Pinata, Filecoin, or node) |
+| `ipfs_add_json` | Store JSON data to IPFS |
+| `ipfs_add_registration` | Store agent registration file |
+| `ipfs_get_registration` | Retrieve registration file by CID |
+
+## OASF Validation
+
+| Tool | Description |
+|------|-------------|
+| `oasf_validate_skill` | Validate a skill slug format |
+| `oasf_validate_domain` | Validate a domain slug format |
+| `oasf_list_skills` | List all valid OASF skills |
+| `oasf_list_domains` | List all valid OASF domains |
+
+## Crawler
+
+| Tool | Description |
+|------|-------------|
+| `crawler_fetch_mcp` | Fetch MCP capabilities from endpoint |
+| `crawler_fetch_a2a` | Fetch A2A agent card from endpoint |
+| `crawler_is_alive` | Health check an endpoint |
+
+## Solana-Specific: ATOM Reputation
+
+| Tool | Description |
+|------|-------------|
+| `solana_atom_stats_get` | Get ATOM stats (HyperLogLog, EMA, history) |
+| `solana_atom_stats_initialize` | Initialize ATOM stats account |
+| `solana_trust_tier_get` | Get trust tier (0-4: Unrated to Platinum) |
+| `solana_enriched_summary_get` | Get enriched summary with ATOM metrics |
+
+## Solana-Specific: Agent Wallet
+
+| Tool | Description |
+|------|-------------|
+| `solana_agent_wallet_get` | Get operational wallet for agent |
+| `solana_sign` | Sign data with agent wallet |
+| `solana_verify` | Verify signature against agent wallet |
+
+## Solana-Specific: Validation
+
+| Tool | Description |
+|------|-------------|
+| `solana_validation_request` | Request third-party validation |
+| `solana_validation_respond` | Respond to validation request |
+| `solana_validation_read` | Read validation request details |
+| `solana_validation_wait` | Wait for validation with retry |
+| `solana_validation_pending_get` | Get pending validations for validator |
+
+## EVM-Specific
+
+| Tool | Description |
+|------|-------------|
+| `evm_agent_wallet_set` | Set operational wallet (EIP-712) |
+| `evm_agent_wallet_unset` | Remove operational wallet |
+
+## Global ID Format
+
+Agents use global IDs for cross-chain identification:
+
+| Chain | Format | Example |
+|-------|--------|---------|
+| Solana | `sol:<pubkey>` | `sol:AgentPubkeyBase58...` |
+| Base | `base:<chainId>:<tokenId>` | `base:8453:123` |
+| Ethereum | `eth:<chainId>:<tokenId>` | `eth:1:456` |
+| Arbitrum | `arb:<chainId>:<tokenId>` | `arb:42161:789` |
+| Polygon | `poly:<chainId>:<tokenId>` | `poly:137:101` |
+| Optimism | `op:<chainId>:<tokenId>` | `op:10:202` |
