@@ -4,7 +4,15 @@ export interface IFeedback {
   agentId: string;
   client: string;
   index: bigint;
-  score: number;
+  /** Raw value (may not be available when reading from chain) */
+  value?: bigint;
+  /** Value decimals (may not be available when reading from chain) */
+  valueDecimals?: number;
+  /** Calculated score (0-100) */
+  score: number | null;
+  tag1?: string;
+  tag2?: string;
+  endpoint?: string;
   comment?: string;
   timestamp: number;
   chainType: 'solana' | 'evm';
@@ -12,7 +20,9 @@ export interface IFeedback {
 
 export interface IFeedbackInput {
   agentId: string;
-  score: number;
+  value: bigint | number;
+  valueDecimals?: number;
+  score?: number;
   comment?: string;
   tag1?: string;
   tag2?: string;

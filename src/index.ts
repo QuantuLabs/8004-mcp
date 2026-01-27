@@ -81,21 +81,24 @@ async function main() {
   registerUnifiedTools(globalState.tools);
   registerSolanaTools(globalState.tools, () => solanaProvider.getState());
 
-  // Initialize global state (cache, etc.)
+  // Initialize global state with lazy cache (lightweight, on-demand)
   await globalState.initialize({
-    autoSync: true,
+    useLazyCache: true,  // Default: lightweight on-demand caching
   });
 
-  // Register Solana data source for cache sync
-  if (solanaProvider.getState().getIndexer()) {
-    const solanaDataSource = new SolanaDataSource(
-      solanaProvider.getState().getIndexer()!,
-      envConfig.solana.cluster
-    );
-    globalState.cache.registerDataSource(solanaDataSource);
+  // Register Solana data source for legacy cache sync (only if using legacy cache)
+  if (!globalState.isLazyCache && solanaProvider.getState().getIndexer()) {
+    const legacyCache = globalState.legacyCache;
+    if (legacyCache) {
+      const solanaDataSource = new SolanaDataSource(
+        solanaProvider.getState().getIndexer()!,
+        envConfig.solana.cluster
+      );
+      legacyCache.registerDataSource(solanaDataSource);
+    }
   }
 
-  // Start background sync
+  // Start background sync (only for legacy cache)
   globalState.start();
 
   // Handle list tools request

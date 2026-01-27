@@ -60,8 +60,16 @@ export interface IAgentSummary {
   totalFeedbacks?: number;
 }
 
+export type SearchMode = 'name' | 'description' | 'endpoint' | 'all';
+
 export interface ISearchParams {
   query?: string;
+  // Specific field searches (take precedence over query when searchMode matches)
+  nameQuery?: string;         // Exact or partial name match
+  descriptionQuery?: string;  // Search in description/capabilities
+  endpointQuery?: string;     // Search by MCP/A2A endpoint URL
+  // Search mode controls which fields to search in
+  searchMode?: SearchMode;    // Default: 'all'
   owner?: string;
   collection?: string;
   chainType?: ChainType;

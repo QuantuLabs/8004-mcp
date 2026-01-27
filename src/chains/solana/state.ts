@@ -146,10 +146,11 @@ export class SolanaStateManager {
   // SDK access (lazy initialization)
   getSdk(): SolanaSDK {
     if (!this._sdk) {
+      // Use this.keypair (includes wallet manager fallback) instead of this._keypair
       this._sdk = new SolanaSDK({
         cluster: this._config.cluster,
         rpcUrl: this._config.rpcUrl,
-        signer: this._keypair,
+        signer: this.keypair,
         indexerUrl: this._config.useIndexer ? this._config.indexerUrl : undefined,
         indexerApiKey: this._config.indexerApiKey,
         useIndexer: this._config.useIndexer,

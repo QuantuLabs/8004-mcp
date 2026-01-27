@@ -52,13 +52,30 @@ export const agentTools: Tool[] = [
   },
   {
     name: 'agent_search',
-    description: 'Search agents across chains with filters',
+    description: 'Search agents across chains with filters. Supports smart search by name, description/capabilities, or endpoint.',
     inputSchema: {
       type: 'object',
       properties: {
         query: {
           type: 'string',
-          description: 'Search query (name, description)',
+          description: 'General search query - searches name and description',
+        },
+        nameQuery: {
+          type: 'string',
+          description: 'Search by agent name (exact or partial match)',
+        },
+        descriptionQuery: {
+          type: 'string',
+          description: 'Search by description, skills, or capabilities',
+        },
+        endpointQuery: {
+          type: 'string',
+          description: 'Search by MCP or A2A endpoint URL',
+        },
+        searchMode: {
+          type: 'string',
+          enum: ['name', 'description', 'endpoint', 'all'],
+          description: 'Which fields to search in (default: all)',
         },
         owner: {
           type: 'string',
@@ -183,6 +200,10 @@ export const agentHandlers: Record<string, (args: unknown) => Promise<unknown>> 
   agent_search: async (args: unknown) => {
     const input = getArgs(args);
     const query = readString(input, 'query');
+    const nameQuery = readString(input, 'nameQuery');
+    const descriptionQuery = readString(input, 'descriptionQuery');
+    const endpointQuery = readString(input, 'endpointQuery');
+    const searchMode = readString(input, 'searchMode') as 'name' | 'description' | 'endpoint' | 'all' | undefined;
     const owner = readString(input, 'owner');
     const collection = readString(input, 'collection');
     const { chainPrefix } = parseChainParam(input);
@@ -190,49 +211,93 @@ export const agentHandlers: Record<string, (args: unknown) => Promise<unknown>> 
     const minTrustTier = readNumber(input, 'minTrustTier');
     const { limit, offset } = parsePagination(input);
 
-    // If chain specified, search that chain only
-    if (chainPrefix && chainPrefix !== 'all') {
-      const provider = globalState.chains.getByPrefix(chainPrefix as 'sol' | 'base' | 'eth' | 'arb' | 'poly' | 'op');
-      if (provider) {
-        const result = await provider.searchAgents({
-          query,
-          owner,
-          collection,
-          minQualityScore,
-          minTrustTier,
-          limit,
-          offset,
-        });
-        return successResponse(result);
-      }
-    }
-
-    // Search cache for cross-chain
-    if (query && globalState.hasCache) {
-      const result = globalState.cache.search(query, {
-        chainPrefix: chainPrefix !== 'all' ? chainPrefix : undefined,
-        limit,
-        offset,
-      });
-      return successResponse(result);
-    }
-
-    // Default to current chain
-    const provider = globalState.chains.getDefault();
-    if (!provider) {
-      return successResponse({ results: [], total: 0, hasMore: false, offset, limit });
-    }
-
-    const result = await provider.searchAgents({
+    // Build search params with specific field queries
+    const searchParams = {
       query,
+      nameQuery,
+      descriptionQuery,
+      endpointQuery,
+      searchMode: searchMode ?? 'all',
       owner,
       collection,
       minQualityScore,
       minTrustTier,
       limit,
       offset,
+    };
+
+    // If specific chain requested (not "all"), search that chain only
+    if (chainPrefix && chainPrefix !== 'all') {
+      const provider = globalState.chains.getByPrefix(chainPrefix as 'sol' | 'base' | 'eth' | 'arb' | 'poly' | 'op');
+      if (provider) {
+        const result = await provider.searchAgents(searchParams);
+        // Cache results for future searches
+        if (globalState.isLazyCache && globalState.lazyCache) {
+          globalState.lazyCache.cacheSearchResults(result.results);
+        }
+        return successResponse(result);
+      }
+    }
+
+    // Multi-chain search: query ALL deployed providers in parallel
+    const allProviders = globalState.chains.getAll();
+    if (allProviders.length === 0) {
+      return successResponse({ results: [], total: 0, hasMore: false, offset, limit });
+    }
+
+    // Search all chains in parallel with per-chain limit
+    // For deep pagination, fetch enough results to satisfy offset + limit
+    // Each chain needs to return at least (offset + limit) / numChains results
+    // but we fetch offset + limit per chain to ensure enough after deduplication
+    const perChainLimit = Math.min(offset + limit, 100);
+    const searchPromises = allProviders.map(async (provider) => {
+      try {
+        const result = await provider.searchAgents({
+          ...searchParams,
+          limit: perChainLimit,
+          offset: 0, // Always start from 0 for multi-chain, handle offset after merge
+        });
+        return result.results;
+      } catch (err) {
+        // Log but don't fail entire search if one chain fails
+        console.warn(`Search failed for ${provider.chainId}: ${err}`);
+        return [];
+      }
     });
-    return successResponse(result);
+
+    const resultsPerChain = await Promise.all(searchPromises);
+
+    // Flatten and deduplicate by globalId
+    const seen = new Set<string>();
+    const allResults = resultsPerChain.flat().filter(agent => {
+      if (seen.has(agent.globalId)) return false;
+      seen.add(agent.globalId);
+      return true;
+    });
+
+    // Sort by qualityScore (descending) then by name
+    allResults.sort((a, b) => {
+      const scoreA = a.qualityScore ?? 0;
+      const scoreB = b.qualityScore ?? 0;
+      if (scoreB !== scoreA) return scoreB - scoreA;
+      return (a.name ?? '').localeCompare(b.name ?? '');
+    });
+
+    // Apply pagination after merge
+    const paginated = allResults.slice(offset, offset + limit);
+
+    // Cache results for future searches
+    if (globalState.isLazyCache && globalState.lazyCache) {
+      globalState.lazyCache.cacheSearchResults(paginated);
+    }
+
+    return successResponse({
+      results: paginated,
+      total: allResults.length,
+      hasMore: offset + paginated.length < allResults.length,
+      offset,
+      limit,
+    });
   },
 
   agent_list_by_owner: async (args: unknown) => {

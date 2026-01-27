@@ -100,40 +100,118 @@ export class SolanaChainProvider implements IChainProvider {
   async searchAgents(params: ISearchParams): Promise<ISearchResult> {
     const sdk = this.state.getSdk();
     const indexer = this.state.getIndexer();
+    const offset = params.offset ?? 0;
+    const limit = params.limit ?? 20;
 
     // Use indexer if available
     if (indexer && !this.state.config.forceOnChain) {
       try {
         let results: IndexedAgent[] = [];
+        let indexerPaginated = false;
 
         if (params.owner) {
+          // getAgentsByOwner returns all agents, no pagination
           results = await indexer.getAgentsByOwner(params.owner);
         } else if (params.collection) {
+          // getAgentsByCollection returns all agents, no pagination
           results = await indexer.getAgentsByCollection(params.collection);
-        } else {
+        } else if (params.query || params.minQualityScore !== undefined || params.minTrustTier !== undefined) {
+          // Text search or filters: fetch larger batch for client-side filtering
+          // Indexer doesn't support text search, so we fetch more and filter
+          const searchLimit = 500; // Fetch up to 500 agents for search
           results = await indexer.getAgents({
-            limit: params.limit,
-            offset: params.offset,
+            limit: searchLimit,
+            offset: 0, // Start from 0, apply offset after filtering
+          });
+          // Will apply client-side pagination after filtering
+        } else {
+          // No filters: use normal pagination
+          results = await indexer.getAgents({
+            limit,
+            offset,
+          });
+          indexerPaginated = true;
+        }
+
+        // Apply client-side query filtering based on search mode
+        const mode = params.searchMode ?? 'all';
+        const nameQ = (params.nameQuery ?? params.query ?? '').toLowerCase();
+        const descQ = (params.descriptionQuery ?? '').toLowerCase();
+        const endpointQ = (params.endpointQuery ?? '').toLowerCase();
+        const generalQ = (params.query ?? '').toLowerCase();
+
+        if (nameQ || descQ || endpointQ || generalQ) {
+          results = results.filter(a => {
+            const name = (a.nft_name ?? '').toLowerCase();
+
+            // Name-specific search
+            if (mode === 'name' && nameQ) {
+              return name.includes(nameQ);
+            }
+
+            // Description search (would need metadata lookup - for now use name)
+            if (mode === 'description' && descQ) {
+              // TODO: Fetch metadata from indexer to search description
+              // For now, fall back to name search
+              return name.includes(descQ);
+            }
+
+            // Endpoint search (would need metadata lookup)
+            if (mode === 'endpoint' && endpointQ) {
+              // TODO: Fetch metadata from indexer to search endpoints
+              // For now, skip endpoint-only searches
+              return false;
+            }
+
+            // Search all fields (default)
+            if (mode === 'all') {
+              if (nameQ && name.includes(nameQ)) return true;
+              if (generalQ && name.includes(generalQ)) return true;
+              // If specific queries provided, require at least one match
+              if (nameQ || descQ || endpointQ) return false;
+              return true;
+            }
+
+            return true;
           });
         }
 
-        // Apply client-side query filtering if needed
-        if (params.query) {
-          const query = params.query.toLowerCase();
+        // Apply minQualityScore filter if specified
+        if (params.minQualityScore !== undefined) {
           results = results.filter(a =>
-            (a.nft_name ?? '').toLowerCase().includes(query)
+            (a.quality_score ?? 0) >= params.minQualityScore!
           );
         }
 
-        // Apply pagination if not already handled
-        const offset = params.offset ?? 0;
-        const limit = params.limit ?? 20;
-        const paginated = results.slice(offset, offset + limit);
+        // Apply minTrustTier filter if specified
+        if (params.minTrustTier !== undefined) {
+          results = results.filter(a =>
+            (a.trust_tier ?? 0) >= params.minTrustTier!
+          );
+        }
 
+        // Only apply client-side pagination if indexer didn't paginate
+        // (or if we had to filter results client-side)
+        const hasTextSearch = !!(params.query || params.nameQuery || params.descriptionQuery || params.endpointQuery);
+        const needsClientPagination = !indexerPaginated || hasTextSearch ||
+          params.minQualityScore !== undefined || params.minTrustTier !== undefined;
+
+        if (needsClientPagination) {
+          const paginated = results.slice(offset, offset + limit);
+          return {
+            results: paginated.map((a: IndexedAgent) => this.mapIndexedAgent(a)),
+            total: results.length,
+            hasMore: offset + paginated.length < results.length,
+            offset,
+            limit,
+          };
+        }
+
+        // Indexer already paginated, return as-is
         return {
-          results: paginated.map((a: IndexedAgent) => this.mapIndexedAgent(a)),
-          total: results.length,
-          hasMore: offset + paginated.length < results.length,
+          results: results.map((a: IndexedAgent) => this.mapIndexedAgent(a)),
+          total: results.length, // Note: indexer doesn't return total count
+          hasMore: results.length === limit, // Assume more if we got a full page
           offset,
           limit,
         };
@@ -160,9 +238,7 @@ export class SolanaChainProvider implements IChainProvider {
       );
     }
 
-    // Apply pagination
-    const offset = params.offset ?? 0;
-    const limit = params.limit ?? 20;
+    // Apply pagination (using offset/limit from top of function)
     const paginated = filtered.slice(offset, offset + limit);
 
     return {
@@ -186,7 +262,11 @@ export class SolanaChainProvider implements IChainProvider {
         agentId,
         client,
         index,
+        // Note: value/valueDecimals not available in SDK read response
         score: feedback.score,
+        tag1: feedback.tag1,
+        tag2: feedback.tag2,
+        endpoint: feedback.endpoint,
         timestamp: Date.now(),
         chainType: 'solana',
       };
@@ -201,22 +281,31 @@ export class SolanaChainProvider implements IChainProvider {
     const includeRevoked = query.includeRevoked ?? false;
     const feedbacks = await sdk.readAllFeedback(assetPubkey, includeRevoked);
 
-    const mapped: IFeedback[] = feedbacks.map((f, i) => ({
+    const mapped: IFeedback[] = feedbacks.map((f) => ({
       agentId: query.agentId,
-      client: query.client ?? '',
-      index: BigInt(i),
+      client: f.client.toBase58(),
+      index: f.feedbackIndex,
+      // Note: value/valueDecimals not available in SDK read response
       score: f.score,
+      tag1: f.tag1,
+      tag2: f.tag2,
+      endpoint: f.endpoint,
       timestamp: Date.now(),
       chainType: 'solana' as const,
     }));
 
     // Apply filtering
+    // Note: Feedbacks with null score (ATOM skipped) are treated as:
+    // - score=0 for minScore filter (included in any minScore >= 0 query)
+    // - score=100 for maxScore filter (included in any maxScore <= 100 query)
+    // This ensures ATOM-skipped feedbacks appear in most queries. To exclude them,
+    // filter client-side by checking f.score !== null.
     let filtered = mapped;
     if (query.minScore !== undefined) {
-      filtered = filtered.filter(f => f.score >= query.minScore!);
+      filtered = filtered.filter(f => (f.score ?? 0) >= query.minScore!);
     }
     if (query.maxScore !== undefined) {
-      filtered = filtered.filter(f => f.score <= query.maxScore!);
+      filtered = filtered.filter(f => (f.score ?? 100) <= query.maxScore!);
     }
 
     // Apply pagination
@@ -300,8 +389,10 @@ export class SolanaChainProvider implements IChainProvider {
     const sdk = this.state.getSdk();
     const assetPubkey = new PublicKey(input.agentId);
 
-    // Build feedback file object
-    const feedbackFile = {
+    // Build GiveFeedbackParams (SDK v0.5.0 format)
+    const feedbackParams = {
+      value: typeof input.value === 'bigint' ? input.value : BigInt(input.value),
+      valueDecimals: input.valueDecimals ?? 0,
       score: input.score,
       tag1: input.tag1,
       tag2: input.tag2,
@@ -310,7 +401,7 @@ export class SolanaChainProvider implements IChainProvider {
       feedbackHash: input.feedbackHash ?? Buffer.alloc(32),
     };
 
-    const result = await sdk.giveFeedback(assetPubkey, feedbackFile, { skipSend });
+    const result = await sdk.giveFeedback(assetPubkey, feedbackParams, { skipSend });
 
     if (skipSend) {
       // Return unsigned transaction in base64 format
@@ -326,15 +417,22 @@ export class SolanaChainProvider implements IChainProvider {
       throw new Error('SDK did not return a transaction for skipSend=true');
     }
 
-    // Transaction was sent, return signature
-    if ('signature' in result) {
+    // Transaction was sent - check if it succeeded
+    // SDK returns { signature: string, success: boolean, error?: string }
+    const txResult = result as { signature?: string; success?: boolean; error?: string };
+
+    if (txResult.success === false && txResult.error) {
+      throw new Error(txResult.error);
+    }
+
+    if (txResult.signature) {
       return {
         unsigned: false,
-        signature: result.signature,
+        signature: txResult.signature,
       };
     }
 
-    throw new Error('Unexpected SDK response');
+    throw new Error('Unexpected SDK response: no signature returned');
   }
 
   // Mapping helpers

@@ -24,9 +24,10 @@ import {
   type X402Settlement,
   type X402FeedbackFile,
 } from '../../core/interfaces/x402.js';
-import { validateProof, isProofFormatValid } from '../../core/x402/proof-validator.js';
+import { validateProofFormat, isProofFormatValid } from '../../core/x402/proof-validator.js';
 import { CHAIN_CONFIGS, type NetworkMode } from '../../config/defaults.js';
 import { createHash } from 'crypto';
+import { encodeReputationValue } from '../../core/utils/value-encoding.js';
 
 export const x402Tools: Tool[] = [
   {
@@ -77,18 +78,26 @@ export const x402Tools: Tool[] = [
           description:
             'Agent ID (global format like sol:xxx or base:8453:123)',
         },
+        value: {
+          type: ['number', 'string'],
+          description: 'Raw metric value (required) - e.g., 9977 for 99.77% when valueDecimals=2',
+        },
+        valueDecimals: {
+          type: 'number',
+          description: 'Decimal precision (0-6), default 0',
+        },
         score: {
           type: 'number',
-          description: 'Feedback score (0-100)',
+          description: 'Quality score (0-100), optional',
         },
         tag1: {
           type: 'string',
           description:
-            'Primary tag (e.g., x402-resource-delivered, x402-good-payer)',
+            'x402 feedback tag (x402-resource-delivered, x402-good-payer, etc.). Use oasf_list_tags to see all.',
         },
         tag2: {
           type: 'string',
-          description: 'Secondary tag (e.g., exact-svm, exact-evm)',
+          description: 'Network tag (exact-svm for Solana, exact-evm for EVM)',
         },
         endpoint: {
           type: 'string',
@@ -122,7 +131,7 @@ export const x402Tools: Tool[] = [
           description: 'Chain override (optional if using global ID)',
         },
       },
-      required: ['agentId', 'score', 'tag1', 'tag2', 'proofOfPayment'],
+      required: ['agentId', 'value', 'tag1', 'tag2', 'proofOfPayment'],
     },
   },
   {
@@ -137,18 +146,26 @@ export const x402Tools: Tool[] = [
           description:
             'Agent ID (global format like sol:xxx or base:8453:123)',
         },
+        value: {
+          type: ['number', 'string'],
+          description: 'Raw metric value (required) - e.g., 9977 for 99.77% when valueDecimals=2',
+        },
+        valueDecimals: {
+          type: 'number',
+          description: 'Decimal precision (0-6), default 0',
+        },
         score: {
           type: 'number',
-          description: 'Feedback score (0-100)',
+          description: 'Quality score (0-100), optional',
         },
         tag1: {
           type: 'string',
           description:
-            'Primary tag (e.g., x402-resource-delivered, x402-good-payer)',
+            'x402 feedback tag (x402-resource-delivered, x402-good-payer, etc.). Use oasf_list_tags to see all.',
         },
         tag2: {
           type: 'string',
-          description: 'Secondary tag (e.g., exact-svm, exact-evm)',
+          description: 'Network tag (exact-svm for Solana, exact-evm for EVM)',
         },
         endpoint: {
           type: 'string',
@@ -198,7 +215,7 @@ export const x402Tools: Tool[] = [
         },
         validateProof: {
           type: 'boolean',
-          description: 'Validate proof on-chain (default: false)',
+          description: 'Validate proof format (default: false). Note: This only validates the format of addresses and transaction hash, NOT on-chain transaction presence.',
         },
         storeOnIpfs: {
           type: 'boolean',
@@ -219,7 +236,7 @@ export const x402Tools: Tool[] = [
           description: 'Chain override (optional if using global ID)',
         },
       },
-      required: ['agentId', 'score', 'tag1', 'tag2', 'proofOfPayment'],
+      required: ['agentId', 'value', 'tag1', 'tag2', 'proofOfPayment'],
     },
   },
 ];
@@ -368,7 +385,6 @@ export const x402Handlers: Record<
   x402_feedback_build: async (args: unknown) => {
     const input = getArgs(args);
     const agentId = readString(input, 'agentId', true);
-    const score = readNumber(input, 'score', true);
     const tag1 = readString(input, 'tag1', true);
     const tag2 = readString(input, 'tag2', true);
     const endpoint = readString(input, 'endpoint');
@@ -378,9 +394,27 @@ export const x402Handlers: Record<
     const signer = readString(input, 'signer');
     const { chainPrefix } = parseChainParam(input);
 
-    // Validate score
-    if (score < 0 || score > 100) {
-      throw new Error('Score must be between 0 and 100');
+    // Parse value (required) - accepts decimal strings ("99.77") or raw integers
+    // Auto-encodes to { value: bigint, valueDecimals: number }
+    const rawValue = input.value;
+    if (rawValue === undefined || rawValue === null) {
+      throw new Error('value is required');
+    }
+    if (typeof rawValue !== 'string' && typeof rawValue !== 'number' && typeof rawValue !== 'bigint') {
+      throw new Error('value must be a number or string');
+    }
+
+    // Use encodeReputationValue for auto-encoding decimal strings
+    // e.g., "99.77" → { value: 9977n, valueDecimals: 2 }
+    const explicitDecimals = readNumber(input, 'valueDecimals');
+    const encoded = encodeReputationValue(rawValue, explicitDecimals);
+    const value = encoded.value;
+    const valueDecimals = encoded.valueDecimals;
+
+    // Parse score (optional)
+    const score = readNumber(input, 'score');
+    if (score !== undefined && (score < 0 || score > 100)) {
+      throw new Error('score must be between 0 and 100');
     }
 
     // Parse proof of payment
@@ -454,6 +488,8 @@ export const x402Handlers: Record<
         clientAddress
       ),
       createdAt: new Date().toISOString(),
+      value: value.toString(),
+      valueDecimals,
       score,
       tag1,
       tag2,
@@ -479,7 +515,6 @@ export const x402Handlers: Record<
   x402_feedback_submit: async (args: unknown) => {
     const input = getArgs(args);
     const agentId = readString(input, 'agentId', true);
-    const score = readNumber(input, 'score', true);
     const tag1 = readString(input, 'tag1', true);
     const tag2 = readString(input, 'tag2', true);
     const endpoint = readString(input, 'endpoint');
@@ -493,9 +528,27 @@ export const x402Handlers: Record<
     const signer = readString(input, 'signer');
     const { chainPrefix } = parseChainParam(input);
 
-    // Validate score
-    if (score < 0 || score > 100) {
-      throw new Error('Score must be between 0 and 100');
+    // Parse value (required) - accepts decimal strings ("99.77") or raw integers
+    // Auto-encodes to { value: bigint, valueDecimals: number }
+    const rawValue = input.value;
+    if (rawValue === undefined || rawValue === null) {
+      throw new Error('value is required');
+    }
+    if (typeof rawValue !== 'string' && typeof rawValue !== 'number' && typeof rawValue !== 'bigint') {
+      throw new Error('value must be a number or string');
+    }
+
+    // Use encodeReputationValue for auto-encoding decimal strings
+    // e.g., "99.77" → { value: 9977n, valueDecimals: 2 }
+    const explicitDecimals = readNumber(input, 'valueDecimals');
+    const encoded = encodeReputationValue(rawValue, explicitDecimals);
+    const value = encoded.value;
+    const valueDecimals = encoded.valueDecimals;
+
+    // Parse score (optional)
+    const score = readNumber(input, 'score');
+    if (score !== undefined && (score < 0 || score > 100)) {
+      throw new Error('score must be between 0 and 100');
     }
 
     // Parse proof of payment
@@ -556,12 +609,12 @@ export const x402Handlers: Record<
       throw new Error('Chain provider does not support feedback operations');
     }
 
-    // Optional on-chain proof validation
+    // Optional proof format validation (addresses, tx hash format - NOT on-chain)
     if (shouldValidateProof) {
-      const proofValidation = await validateProof(proofOfPayment);
+      const proofValidation = await validateProofFormat(proofOfPayment);
       if (!proofValidation.valid) {
         throw new Error(
-          `Proof validation failed: ${proofValidation.error ?? 'Unknown error'}`
+          `Proof format validation failed: ${proofValidation.error ?? 'Unknown error'}`
         );
       }
     }
@@ -590,6 +643,8 @@ export const x402Handlers: Record<
         clientAddress
       ),
       createdAt: new Date().toISOString(),
+      value: value.toString(),
+      valueDecimals,
       score,
       tag1,
       tag2,
@@ -635,6 +690,8 @@ export const x402Handlers: Record<
     const result = await (provider as IWritableChainProvider).giveFeedback(
       {
         agentId: rawId,
+        value,
+        valueDecimals,
         score,
         comment,
         tag1,
@@ -665,6 +722,8 @@ export const x402Handlers: Record<
       feedbackHash: `0x${feedbackHash}`,
       feedbackUri,
       agentId: rawId,
+      value: value.toString(),
+      valueDecimals,
       score,
       tag1,
       tag2,

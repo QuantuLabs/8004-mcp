@@ -3,6 +3,7 @@
 import {
   DEFAULT_SOLANA_CLUSTER,
   DEFAULT_INDEXER_URL,
+  DEFAULT_INDEXER_API_KEY,
   DEFAULT_CRAWLER_TIMEOUT_MS,
   DEFAULT_NETWORK_MODE,
   type NetworkMode,
@@ -70,7 +71,7 @@ export function loadEnvConfig(): IEnvConfig {
     },
     indexer: {
       url: env.INDEXER_URL ?? DEFAULT_INDEXER_URL,
-      apiKey: env.INDEXER_API_KEY,
+      apiKey: env.INDEXER_API_KEY ?? DEFAULT_INDEXER_API_KEY,
       enabled: parseBooleanEnv(env.USE_INDEXER, true),
       fallback: parseBooleanEnv(env.INDEXER_FALLBACK, true),
       forceOnChain: parseBooleanEnv(env.FORCE_ON_CHAIN, false),

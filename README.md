@@ -60,46 +60,65 @@ claude mcp add 8004-mcp \
 
 ### Examples
 
-#### Search for AI agents
+#### Multi-chain agent search
+
+Search across all blockchains without specifying a chain:
 
 ```
-> Find trading agents on Solana with good reputation
+> Find the agent named "DataAnalyst Pro"
 
-I'll search for trading agents using the cache_search tool.
+Found 2 agents named "DataAnalyst Pro" on Ethereum Sepolia:
+- eth:11155111:461 - Owner: 0xfb49...
+- eth:11155111:460 - Owner: 0x6fd8...
+```
 
-Found 5 agents matching "trading":
-1. sol:7xKXt... - "AlphaTrader" - Trust: Gold (87/100)
-2. sol:9mPQr... - "DeFi Trading Bot" - Trust: Silver (72/100)
-...
+```
+> Search for agents with "Yoda" in the name
+
+Found 4 agents:
+- eth:11155111:523 - "Yoda 27 Jan"
+- eth:11155111:468 - "Yoda 3"
+- eth:11155111:467 - "Yoda Dash 1"
+- eth:11155111:465 - "Yoda PG 2 IPFS"
+All owned by 0xad55...
 ```
 
 #### Get agent details
 
 ```
-> Show me details about agent sol:7xKXtG8vN2...
+> Show me details about agent eth:11155111:474
 
-Using agent_get to fetch details...
-
-Agent: AlphaTrader
-- Owner: 5kR9x...
-- Trust Tier: Gold
-- Quality Score: 87/100
-- Total Feedbacks: 156
-- MCP Endpoint: https://alpha.trading/mcp
+Agent: 8004 Test Agent
+- Chain: Ethereum Sepolia
+- Owner: 0x9ca4...
+- Description: This is an explanation of my test agent
+- Created: 2026-01-27
 ```
 
-#### Check agent reputation
+#### Check agent reputation (Solana only)
+
+> Note: Trust tiers and ATOM reputation metrics are only available on Solana.
 
 ```
-> What's the reputation of sol:7xKXtG8vN2...?
+> What's the reputation of sol:6YMAwDYygQEo1BGDavNaKhhfy52yzZ6SoBsa2wdgXthJ?
 
-Using reputation_get...
+Trust Tier: Unrated (0/4)
+Quality Score: 2440
+Total Feedbacks: 29
+Average Score: 24.4
+```
 
-Trust Tier: Gold (3/4)
-Quality Score: 87
-Unique Clients: 89
-Total Feedbacks: 156
-Positive Rate: 94%
+#### Top agents leaderboard (Solana only)
+
+```
+> Show me the top 5 agents by reputation
+
+Top 5 Solana agents:
+1. sol:9j7cTX... - Score: 5586 (34 feedbacks)
+2. sol:5heKjG... - Score: 5544 (35 feedbacks)
+3. sol:HnGRPf... - Score: 3364 (50 feedbacks)
+4. sol:6YMAwD... - Score: 2440 (30 feedbacks)
+5. sol:Arskmk... - Score: 2440 (30 feedbacks)
 ```
 
 #### Submit feedback
@@ -107,28 +126,8 @@ Positive Rate: 94%
 ```
 > Give a score of 90 to agent sol:7xKXtG8vN2... with comment "Fast execution"
 
-First I need to unlock a wallet. Using wallet_unlock...
-Now submitting feedback with feedback_give...
-
-Feedback submitted successfully!
-Transaction: 4xR7m...
-```
-
-#### x402 Payment Integration
-
-Submit feedback with proof-of-payment from x402 transactions:
-
-```
-> Submit x402 feedback for agent sol:7xKXtG8vN2... with payment proof
-
-Using x402_feedback_submit...
-
-Feedback submitted with proof-of-payment:
-- Score: 85
-- Tag: x402-resource-delivered
-- Proof: txHash 5xR7m... verified
-- Stored on IPFS: ipfs://QmXyz...
-- Transaction: 6tY8n...
+First I need to unlock a wallet...
+Feedback submitted! Transaction: 4xR7m...
 ```
 
 #### Register a new agent
@@ -136,9 +135,8 @@ Feedback submitted with proof-of-payment:
 ```
 > Register a new agent called "MyBot" with MCP endpoint https://mybot.com/mcp
 
-I'll help you register a new agent:
-1. First, let me upload the registration file to IPFS...
-2. Now registering on-chain with agent_register...
+1. Uploading registration to IPFS...
+2. Registering on-chain...
 
 Agent registered!
 - ID: sol:NewAgentPubkey...
@@ -150,8 +148,6 @@ Agent registered!
 
 ```
 > Create a new Solana wallet called "trading-wallet"
-
-Using wallet_create...
 
 Wallet created:
 - Name: trading-wallet
@@ -368,16 +364,6 @@ Want to add your own ERC-8004 compatible registry to the MCP? [Open an issue on 
    - `getFeedback(agentId, client, index)` - Read feedback
    - `listFeedbacks(query)` - List feedbacks
    - `getReputationSummary(id)` - Get reputation
-
-### How to Submit
-
-[Open an issue](https://github.com/QuantuLabs/8004-mcp/issues/new) with:
-- Link to your registry repository (public, open source)
-- Link to your indexer or data source (open source)
-- Link to API documentation
-- Contract addresses (testnet and/or mainnet)
-
-We review submissions regularly and will provide feedback.
 
 ## License
 

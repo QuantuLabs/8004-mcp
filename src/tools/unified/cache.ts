@@ -89,7 +89,9 @@ export const cacheHandlers: Record<string, (args: unknown) => Promise<unknown>> 
       });
     }
 
-    const result = globalState.cache.search(query, {
+    // Both LazyCache and AgentCache have compatible search() method
+    const cache = globalState.cache;
+    const result = cache.search(query, {
       chainPrefix: chain !== 'all' ? chain : undefined,
       limit,
       offset,
@@ -110,8 +112,54 @@ export const cacheHandlers: Record<string, (args: unknown) => Promise<unknown>> 
       });
     }
 
-    const sourceId = chain && chain !== 'all' ? chain : undefined;
-    const results = await globalState.cache.refresh({
+    // LazyCache: just evict expired entries (no background sync)
+    if (globalState.isLazyCache) {
+      const lazyCache = globalState.lazyCache;
+      if (lazyCache) {
+        const evicted = lazyCache.evictExpired();
+        if (force) {
+          lazyCache.clear();
+          return successResponse({
+            message: 'Cache cleared (lazy mode)',
+            evicted: 'all',
+          });
+        }
+        return successResponse({
+          message: 'Expired entries evicted (lazy mode)',
+          evicted,
+        });
+      }
+    }
+
+    // Legacy AgentCache: trigger background sync
+    const legacyCache = globalState.legacyCache;
+    if (!legacyCache) {
+      return successResponse({
+        error: 'Legacy cache not available',
+        status: 'not_available',
+      });
+    }
+
+    // Map chain prefix (e.g., 'sol') to full sourceId (e.g., 'sol:devnet')
+    let sourceId: string | undefined;
+    if (chain && chain !== 'all') {
+      const allProgress = legacyCache.getSyncProgress();
+      if (allProgress instanceof Map) {
+        for (const [id] of allProgress) {
+          if (id === chain || id.startsWith(`${chain}:`)) {
+            sourceId = id;
+            break;
+          }
+        }
+        if (!sourceId) {
+          sourceId = chain;
+        }
+      } else {
+        sourceId = chain;
+      }
+    }
+
+    const results = await legacyCache.refresh({
       sourceId,
       force,
     });
@@ -135,13 +183,14 @@ export const cacheHandlers: Record<string, (args: unknown) => Promise<unknown>> 
         total: 0,
         byChain: {},
         dbSize: '0 B',
-        lastSync: {},
+        mode: 'none',
       });
     }
 
     const stats = globalState.cache.getStats();
+    const mode = globalState.isLazyCache ? 'lazy' : 'legacy';
 
-    return successResponse(stats);
+    return successResponse({ ...stats, mode });
   },
 
   cache_sync_status: async () => {
@@ -152,18 +201,33 @@ export const cacheHandlers: Record<string, (args: unknown) => Promise<unknown>> 
       });
     }
 
-    const progress = globalState.cache.getSyncProgress();
+    // LazyCache doesn't have sync progress (on-demand caching)
+    if (globalState.isLazyCache) {
+      const stats = globalState.lazyCache?.getStats();
+      return successResponse({
+        mode: 'lazy',
+        message: 'Lazy cache uses on-demand caching, no background sync',
+        stats: stats ?? { total: 0, byChain: {}, dbSize: '0 B', expired: 0 },
+      });
+    }
 
-    // Handle both single progress and Map
+    // Legacy cache has sync progress
+    const legacyCache = globalState.legacyCache;
+    if (!legacyCache) {
+      return successResponse({ sources: {} });
+    }
+
+    const progress = legacyCache.getSyncProgress();
+
     if (progress instanceof Map) {
       const sources: Record<string, unknown> = {};
       for (const [id, status] of progress) {
         sources[id] = status;
       }
-      return successResponse({ sources });
+      return successResponse({ mode: 'legacy', sources });
     }
 
-    return successResponse({ sources: { default: progress } });
+    return successResponse({ mode: 'legacy', sources: { default: progress } });
   },
 };
 

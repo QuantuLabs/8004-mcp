@@ -55,6 +55,47 @@ Complete list of all MCP tools available in @quantulabs/8004-mcp.
 | `feedback_revoke` | Revoke a previously given feedback |
 | `feedback_response_append` | Append a response to feedback (as agent owner) |
 
+### feedback_give Parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `id` | string | Yes | Agent ID (global or chain-specific) |
+| `value` | number/string | Yes | Metric value - accepts decimal strings (`"99.77"`) or raw integers |
+| `valueDecimals` | number | No | Only needed for raw integers. Auto-detected from decimal strings |
+| `score` | number | No | Quality score (0-100), optional |
+| `tag1` | string | No | Primary ATOM tag (e.g., uptime, latency, accuracy) |
+| `tag2` | string | No | Time period tag (e.g., day, week, month, year) |
+| `comment` | string | No | Optional feedback comment |
+| `skipSend` | boolean | No | Return unsigned transaction if true |
+
+**Value Format Examples:**
+```json
+// Recommended: Decimal string (auto-encoded)
+{ "value": "99.77", "tag1": "uptime" }
+// → Encoded as value=9977, valueDecimals=2
+
+// Also supported: Raw integer with explicit decimals
+{ "value": 9977, "valueDecimals": 2, "tag1": "uptime" }
+```
+
+### ATOM Tags (Solana)
+
+The ATOM reputation engine uses standardized tags for automatic normalization:
+
+**tag1 (Category):**
+- `uptime` - Availability percentage (e.g., `"99.77"`)
+- `latency` - Response time in ms (lower is better)
+- `accuracy` - Accuracy percentage
+- `throughput` - Requests per second
+- `error-rate` - Error percentage (lower is better)
+- `cost` - Cost in microdollars (lower is better)
+
+**tag2 (Time Period):**
+- `day` - Daily measurement
+- `week` - Weekly measurement
+- `month` - Monthly measurement
+- `year` - Yearly measurement
+
 ## Reputation
 
 | Tool | Description |
@@ -186,6 +227,21 @@ Tools for integrating ERC-8004 agent reputation with the x402 payment protocol.
 - `exact-evm` - EVM-based networks (Ethereum, Base, etc.)
 - `exact-svm` - Solana Virtual Machine
 
+### x402_feedback_submit Parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `agentId` | string | Yes | Agent ID (global format like sol:xxx or base:8453:123) |
+| `value` | number/string | Yes | Raw metric value |
+| `valueDecimals` | number | No | Decimal precision (0-6), default 0 |
+| `score` | number | No | Quality score (0-100), optional |
+| `tag1` | string | Yes | Primary tag (e.g., x402-resource-delivered) |
+| `tag2` | string | Yes | Secondary tag (e.g., exact-svm, exact-evm) |
+| `proofOfPayment` | object | Yes | Proof of payment object |
+| `feedbackUri` | string | No | URI where feedback file is stored |
+| `storeOnIpfs` | boolean | No | Store feedback file on IPFS (default: true) |
+| `skipSend` | boolean | No | Return unsigned transaction if true |
+
 ### Example Flows
 
 #### Option A: Auto-store on IPFS (requires `ipfs_configure`)
@@ -205,7 +261,8 @@ const proof = await x402_proof_parse({ paymentResponse: "eyJ0eEhhc2gi..." });
 // 4. Submit feedback (auto-stores on IPFS)
 await x402_feedback_submit({
   agentId: "sol:AgentPubkey...",
-  score: 85,
+  value: 8500,
+  valueDecimals: 2,
   tag1: "x402-resource-delivered",
   tag2: "exact-svm",
   endpoint: "https://agent.example.com/api",
@@ -220,7 +277,8 @@ await x402_feedback_submit({
 // 1. Build feedback file
 const result = await x402_feedback_build({
   agentId: "base:84532:123",
-  score: 90,
+  value: 9000,
+  valueDecimals: 2,
   tag1: "x402-resource-delivered",
   tag2: "exact-evm",
   endpoint: "https://agent.example.com/api",
@@ -234,8 +292,10 @@ const feedbackUri = "ar://abc123..."; // or "ipfs://Qm...", "https://..."
 // 3. Submit with your URI
 await x402_feedback_submit({
   agentId: "base:84532:123",
-  score: 90,
+  value: 9000,
+  valueDecimals: 2,
   tag1: "x402-resource-delivered",
+  tag2: "exact-evm",
   proofOfPayment: result.feedbackFile.proofOfPayment,
   feedbackUri: feedbackUri,  // Your storage URI
   storeOnIpfs: false

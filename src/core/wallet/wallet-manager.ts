@@ -377,7 +377,7 @@ export class WalletManager {
       mode: 0o600, // Read/write for owner only
     });
 
-    // Auto-unlock after creation
+    // Auto-unlock after creation with auto-lock timer
     if (chainType === 'solana') {
       const keypair = Keypair.fromSecretKey(secretKey);
       this.unlockedWallets.set(name, {
@@ -399,6 +399,15 @@ export class WalletManager {
         evmPrivateKey: privateKeyHex,
       });
     }
+
+    // Create session with auto-lock timer
+    const wallet = this.unlockedWallets.get(name)!;
+    const timer = setTimeout(() => this.autoLockWallet(name), this.autoLockMs);
+    this.walletSessions.set(name, {
+      wallet,
+      timer,
+      lastActivity: Date.now(),
+    });
 
     return {
       name,
@@ -481,7 +490,7 @@ export class WalletManager {
       mode: 0o600,
     });
 
-    // Auto-unlock after import
+    // Auto-unlock after import with auto-lock timer
     if (chainType === 'solana') {
       const keypair = Keypair.fromSecretKey(secretKey);
       this.unlockedWallets.set(name, {
@@ -503,6 +512,15 @@ export class WalletManager {
         evmPrivateKey: privateKeyHex,
       });
     }
+
+    // Create session with auto-lock timer
+    const importedWallet = this.unlockedWallets.get(name)!;
+    const importTimer = setTimeout(() => this.autoLockWallet(name), this.autoLockMs);
+    this.walletSessions.set(name, {
+      wallet: importedWallet,
+      timer: importTimer,
+      lastActivity: Date.now(),
+    });
 
     return {
       name,

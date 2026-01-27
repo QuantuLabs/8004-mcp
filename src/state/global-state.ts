@@ -3,6 +3,7 @@
 import { ChainRegistry } from '../core/registry/chain-registry.js';
 import { ToolRegistry } from '../core/registry/tool-registry.js';
 import { AgentCache } from '../core/cache/agent-cache.js';
+import { LazyCache } from '../core/cache/lazy-cache.js';
 import { IPFSService } from '../core/services/ipfs-service.js';
 import type { IChainProvider } from '../core/interfaces/chain-provider.js';
 import type { IEnvConfig } from '../config/env.js';
@@ -18,9 +19,12 @@ import {
 import type { ChainPrefix } from '../core/interfaces/agent.js';
 
 export interface IGlobalStateConfig {
-  autoSync?: boolean;
+  autoSync?: boolean;          // Only used with legacy cache
   cachePath?: string;
   networkMode?: NetworkMode;
+  useLazyCache?: boolean;      // Default: true (lightweight on-demand caching)
+  cacheTtlMs?: number;         // TTL for lazy cache entries (default: 24h)
+  cacheMaxEntries?: number;    // Max entries in lazy cache (default: 10000)
 }
 
 export interface INetworkStatus {
@@ -66,7 +70,9 @@ class GlobalState {
   private _networkMode: NetworkMode;
   private _chainRegistry: ChainRegistry;
   private _toolRegistry: ToolRegistry;
-  private _cache: AgentCache | null = null;
+  private _legacyCache: AgentCache | null = null;
+  private _lazyCache: LazyCache | null = null;
+  private _useLazyCache = true;
   private _crawlerTimeoutMs: number;
   private _ipfsService: IPFSService;
   private _initialized = false;
@@ -196,16 +202,34 @@ class GlobalState {
     return this._ipfsService;
   }
 
-  // Cache
-  get cache(): AgentCache {
-    if (!this._cache) {
-      throw new Error('Cache not initialized. Call initialize() first.');
+  // Cache - supports both legacy (full sync) and lazy (on-demand) modes
+  get cache(): AgentCache | LazyCache {
+    if (this._useLazyCache) {
+      if (!this._lazyCache) {
+        throw new Error('LazyCache not initialized. Call initialize() first.');
+      }
+      return this._lazyCache;
     }
-    return this._cache;
+    if (!this._legacyCache) {
+      throw new Error('AgentCache not initialized. Call initialize() first.');
+    }
+    return this._legacyCache;
+  }
+
+  get lazyCache(): LazyCache | null {
+    return this._lazyCache;
+  }
+
+  get legacyCache(): AgentCache | null {
+    return this._legacyCache;
   }
 
   get hasCache(): boolean {
-    return this._cache !== null;
+    return this._useLazyCache ? this._lazyCache !== null : this._legacyCache !== null;
+  }
+
+  get isLazyCache(): boolean {
+    return this._useLazyCache;
   }
 
   // Lifecycle
@@ -217,11 +241,23 @@ class GlobalState {
       this._networkMode = config.networkMode;
     }
 
-    // Initialize cache
-    this._cache = new AgentCache({
-      dbPath: config?.cachePath,
-      autoSync: config?.autoSync ?? true,
-    });
+    // Choose cache mode (lazy by default for lightweight operation)
+    this._useLazyCache = config?.useLazyCache ?? true;
+
+    if (this._useLazyCache) {
+      // Initialize lazy cache (lightweight, on-demand)
+      this._lazyCache = new LazyCache({
+        dbPath: config?.cachePath,
+        ttlMs: config?.cacheTtlMs,
+        maxEntries: config?.cacheMaxEntries,
+      });
+    } else {
+      // Initialize legacy cache (full sync, background updates)
+      this._legacyCache = new AgentCache({
+        dbPath: config?.cachePath,
+        autoSync: config?.autoSync ?? true,
+      });
+    }
 
     // Initialize all registered chains
     await this._chainRegistry.initializeAll();
@@ -230,14 +266,18 @@ class GlobalState {
   }
 
   start(): void {
-    if (this._cache) {
-      this._cache.start();
+    // Legacy cache has background sync, lazy cache doesn't need it
+    if (this._legacyCache && !this._useLazyCache) {
+      this._legacyCache.start();
     }
   }
 
   stop(): void {
-    if (this._cache) {
-      this._cache.stop();
+    if (this._legacyCache) {
+      this._legacyCache.stop();
+    }
+    if (this._lazyCache) {
+      this._lazyCache.stop();
     }
   }
 
@@ -265,7 +305,19 @@ class GlobalState {
   getSnapshot(): IGlobalStateSnapshot {
     const chains = this._chainRegistry.getAll();
     const defaultChain = this._chainRegistry.getDefault();
-    const cacheStats = this._cache?.getStats() ?? { total: 0, byChain: {}, dbSize: '0 B', lastSync: {} };
+
+    // Get cache stats from either lazy or legacy cache
+    let cacheStats: { total: number; byChain: Record<string, number>; dbSize: string };
+    if (this._useLazyCache && this._lazyCache) {
+      const stats = this._lazyCache.getStats();
+      cacheStats = { total: stats.total, byChain: stats.byChain, dbSize: stats.dbSize };
+    } else if (this._legacyCache) {
+      const stats = this._legacyCache.getStats();
+      cacheStats = { total: stats.total, byChain: stats.byChain, dbSize: stats.dbSize };
+    } else {
+      cacheStats = { total: 0, byChain: {}, dbSize: '0 B' };
+    }
+
     const ipfsConfig = this._ipfsService.getConfig();
 
     return {

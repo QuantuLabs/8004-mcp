@@ -3,6 +3,7 @@
 import { encodeFunctionData } from 'viem';
 import {
   SDK as Agent0SDK,
+  SubgraphClient,
   REPUTATION_REGISTRY_ABI,
   type SDKConfig,
 } from 'agent0-sdk';
@@ -52,6 +53,7 @@ export class EVMChainProvider implements IChainProvider {
   private readonly config: IEVMConfig;
   private _ready = false;
   private _sdk?: Agent0SDK;
+  private _subgraph?: SubgraphClient;
 
   constructor(config: IEVMConfig) {
     this.config = config;
@@ -87,6 +89,15 @@ export class EVMChainProvider implements IChainProvider {
       this._sdk = new Agent0SDK(sdkConfig);
     }
     return this._sdk;
+  }
+
+  // Get subgraph client for direct GraphQL queries (faster reads, no RPC)
+  private getSubgraph(): SubgraphClient | undefined {
+    if (!this.config.subgraphUrl) return undefined;
+    if (!this._subgraph) {
+      this._subgraph = new SubgraphClient(this.config.subgraphUrl);
+    }
+    return this._subgraph;
   }
 
   // Invalidate SDK (e.g., after wallet unlock)
@@ -152,20 +163,116 @@ export class EVMChainProvider implements IChainProvider {
   }
 
   async searchAgents(params: ISearchParams): Promise<ISearchResult> {
+    const limit = params.limit ?? 20;
+    const offset = params.offset ?? 0;
+
+    // Determine the name query to use based on search mode
+    const mode = params.searchMode ?? 'all';
+    let nameFilter = params.nameQuery ?? params.query;
+
+    // For description mode, use descriptionQuery if provided
+    if (mode === 'description' && params.descriptionQuery) {
+      nameFilter = params.descriptionQuery;
+    }
+
+    // Endpoint search: filter by mcp/a2a capabilities (AgentSummary doesn't have endpoint URLs)
+    // endpointQuery can match against mcpTools, a2aSkills, or require mcp/a2a support
+    const endpointFilter = (mode === 'endpoint' || mode === 'all') ? params.endpointQuery : undefined;
+
     try {
-      const sdk = this.getSdk();
-      const results = await sdk.searchAgents(
-        {
-          owners: params.owner ? [params.owner] : undefined,
-          name: params.query,
-        },
-        {
-          pageSize: params.limit ?? 20,
+      // Prefer subgraph for reads (faster, no RPC calls)
+      const subgraph = this.getSubgraph();
+      if (subgraph) {
+        // Fetch more if we need to filter client-side
+        const fetchLimit = endpointFilter ? Math.min(limit * 3, 100) : limit;
+        const agents = await subgraph.searchAgents(
+          {
+            owners: params.owner ? [params.owner as `0x${string}`] : undefined,
+            name: nameFilter,
+          },
+          fetchLimit,
+          offset
+        );
+
+        // Apply client-side filtering if needed
+        let filteredAgents = agents;
+        if (endpointFilter) {
+          const lowerEndpoint = endpointFilter.toLowerCase();
+          filteredAgents = agents.filter((a: AgentSummary) => {
+            // Search in mcpTools, a2aSkills, mcpPrompts, mcpResources
+            const allCapabilities = [
+              ...(a.mcpTools ?? []),
+              ...(a.a2aSkills ?? []),
+              ...(a.mcpPrompts ?? []),
+              ...(a.mcpResources ?? []),
+            ];
+            // Also match if looking for mcp/a2a support
+            if (lowerEndpoint === 'mcp' && a.mcp) return true;
+            if (lowerEndpoint === 'a2a' && a.a2a) return true;
+            return allCapabilities.some(cap =>
+              cap.toLowerCase().includes(lowerEndpoint)
+            );
+          });
         }
-      );
+
+        // Apply limit after filtering
+        const paginatedAgents = filteredAgents.slice(0, limit);
+
+        return {
+          results: paginatedAgents.map((a: AgentSummary) => ({
+            id: a.agentId,
+            globalId: toGlobalId(this.chainPrefix, a.agentId, String(this.config.chainId)),
+            chainType: 'evm' as const,
+            chainPrefix: this.chainPrefix,
+            name: a.name ?? `Agent #${a.agentId}`,
+            owner: a.owners?.[0] ?? '',
+            // Include capability flags for better search results
+            mcp: a.mcp,
+            a2a: a.a2a,
+          })),
+          total: filteredAgents.length,
+          hasMore: filteredAgents.length > limit,
+          offset,
+          limit,
+        };
+      }
+
+      // Fallback to SDK (may use RPC)
+      const sdk = this.getSdk();
+
+      // Note: agent0-sdk uses cursor-based pagination, not offset-based.
+      // For offset>0, we need to iterate through pages to skip results.
+      // This is inefficient for large offsets but maintains API compatibility.
+      let cursor: string | undefined;
+      let allItems: AgentSummary[] = [];
+
+      // Fetch pages until we have enough items to satisfy offset + limit
+      do {
+        const results = await sdk.searchAgents(
+          {
+            owners: params.owner ? [params.owner] : undefined,
+            name: nameFilter,
+          },
+          {
+            pageSize: Math.min(100, limit + offset), // Fetch more to handle offset
+            cursor,
+          }
+        );
+
+        allItems = allItems.concat(results.items);
+        cursor = results.nextCursor;
+
+        // If we have enough items or no more pages, stop
+        if (allItems.length >= offset + limit || !cursor) {
+          break;
+        }
+      } while (cursor);
+
+      // Apply offset by slicing
+      const paginatedItems = allItems.slice(offset, offset + limit);
 
       return {
-        results: results.items.map((a: AgentSummary) => ({
+        results: paginatedItems.map((a: AgentSummary) => ({
           id: a.agentId,
           globalId: toGlobalId(this.chainPrefix, a.agentId, String(this.config.chainId)),
           chainType: 'evm' as const,
@@ -173,10 +280,10 @@ export class EVMChainProvider implements IChainProvider {
           name: a.name ?? `Agent #${a.agentId}`,
           owner: a.owners?.[0] ?? '',
         })),
-        total: results.items.length,
-        hasMore: !!results.nextCursor,
-        offset: params.offset ?? 0,
-        limit: params.limit ?? 20,
+        total: allItems.length,
+        hasMore: allItems.length > offset + limit || !!cursor,
+        offset,
+        limit,
       };
     } catch (err) {
       console.warn(`EVMChainProvider.searchAgents error: ${err}`);
@@ -184,8 +291,8 @@ export class EVMChainProvider implements IChainProvider {
         results: [],
         total: 0,
         hasMore: false,
-        offset: params.offset ?? 0,
-        limit: params.limit ?? 20,
+        offset,
+        limit,
       };
     }
   }
@@ -197,11 +304,20 @@ export class EVMChainProvider implements IChainProvider {
       const feedback = await sdk.getFeedback(agentId, client as `0x${string}`, Number(index));
       if (!feedback) return null;
 
+      // ERC-8004 EVM: SDK returns decoded value (no raw value/decimals exposed separately)
+      // Score field does not exist on EVM per spec - only value/valueDecimals on-chain
       return {
         agentId,
         client,
         index,
-        score: feedback.value ?? 0,
+        // SDK returns decoded value as number - raw encoding not available from SDK
+        value: undefined,
+        valueDecimals: undefined,
+        // No score field on EVM per ERC-8004 spec
+        score: null,
+        tag1: feedback.tags?.[0],
+        tag2: feedback.tags?.[1],
+        endpoint: feedback.endpoint,
         comment: feedback.text,
         timestamp: feedback.createdAt ?? Date.now(),
         chainType: 'evm',
@@ -214,6 +330,40 @@ export class EVMChainProvider implements IChainProvider {
 
   async listFeedbacks(query: IFeedbackQuery): Promise<IFeedbackResult> {
     try {
+      // Prefer subgraph for reads (faster, no RPC calls)
+      const subgraph = this.getSubgraph();
+      if (subgraph) {
+        const feedbacks = await subgraph.searchFeedback(
+          {
+            agents: [query.agentId],
+            reviewers: query.client ? [query.client as `0x${string}`] : undefined,
+            includeRevoked: query.includeRevoked,
+          },
+          query.limit ?? 20,
+          query.offset ?? 0
+        );
+
+        return {
+          feedbacks: feedbacks.map((f: Record<string, unknown>) => ({
+            agentId: String(f.agentId ?? query.agentId),
+            client: String(f.reviewer ?? ''),
+            index: BigInt(typeof f.index === 'number' || typeof f.index === 'string' ? f.index : 0),
+            value: undefined,
+            valueDecimals: undefined,
+            score: null,
+            tag1: (f.tags as string[])?.[0],
+            tag2: (f.tags as string[])?.[1],
+            endpoint: f.endpoint as string | undefined,
+            comment: f.text as string | undefined,
+            timestamp: Number(f.createdAt ?? Date.now()),
+            chainType: 'evm' as const,
+          })),
+          total: feedbacks.length,
+          hasMore: feedbacks.length === (query.limit ?? 20),
+        };
+      }
+
+      // Fallback to SDK (may use RPC)
       const sdk = this.getSdk();
       const feedbacks = await sdk.searchFeedback({
         agentId: query.agentId,
@@ -222,15 +372,26 @@ export class EVMChainProvider implements IChainProvider {
       });
 
       return {
-        feedbacks: feedbacks.map((f: Feedback) => ({
-          agentId: f.agentId,
-          client: f.reviewer,
-          index: BigInt(f.id[2]),
-          score: f.value ?? 0,
-          comment: f.text,
-          timestamp: f.createdAt ?? Date.now(),
-          chainType: 'evm' as const,
-        })),
+        feedbacks: feedbacks.map((f: Feedback) => {
+          // ERC-8004 EVM: SDK returns decoded value (no raw value/decimals exposed separately)
+          // Score field does not exist on EVM per spec - only value/valueDecimals on-chain
+          return {
+            agentId: f.agentId,
+            client: f.reviewer,
+            index: BigInt(f.id[2]),
+            // SDK returns decoded value as number - raw encoding not available from SDK
+            value: undefined,
+            valueDecimals: undefined,
+            // No score field on EVM per ERC-8004 spec
+            score: null,
+            tag1: f.tags?.[0],
+            tag2: f.tags?.[1],
+            endpoint: f.endpoint,
+            comment: f.text,
+            timestamp: f.createdAt ?? Date.now(),
+            chainType: 'evm' as const,
+          };
+        }),
         total: feedbacks.length,
         hasMore: false, // searchFeedback doesn't support pagination yet
       };
@@ -255,8 +416,8 @@ export class EVMChainProvider implements IChainProvider {
     // agentId can be "tokenId" or "chainId:tokenId" format - extract just the token ID
     const rawAgentId = input.agentId.includes(':') ? input.agentId.split(':').pop()! : input.agentId;
     const agentId = BigInt(rawAgentId);
-    const value = BigInt(Math.round(input.score * 100)); // Convert to basis points
-    const valueDecimals = 2;
+    const value = typeof input.value === 'bigint' ? input.value : BigInt(input.value);
+    const valueDecimals = input.valueDecimals ?? 0;
     const tag1 = input.tag1 ?? '';
     const tag2 = input.tag2 ?? '';
     const endpoint = input.endpoint ?? '';
@@ -292,19 +453,23 @@ export class EVMChainProvider implements IChainProvider {
       throw new Error('Write operations require a configured signer. Use skipSend=true to get unsigned transaction.');
     }
 
+    // agent0-sdk uses encodeReputationValue() internally which expects a decimal string
+    // Convert our raw value/valueDecimals back to decimal format for SDK encoding
+    // Example: value=9977n, valueDecimals=2 → "99.77"
+    const decimalValue = this.rawToDecimalString(value, valueDecimals);
+
     const result = await sdk.giveFeedback(
       input.agentId,
-      input.score,
+      decimalValue,
       input.tag1,
       input.tag2,
       input.endpoint,
       input.feedbackUri ? { text: input.comment } : undefined
     );
 
-    // Feedback result contains the feedback object with ID
     return {
       unsigned: false,
-      signature: `${result.id[0]}:${result.id[1]}:${result.id[2]}`,
+      signature: result.hash,
     };
   }
 
@@ -338,6 +503,30 @@ export class EVMChainProvider implements IChainProvider {
     if (count >= 20 && averageValue >= 65) return TrustTier.Silver;
     if (count >= 5 && averageValue >= 50) return TrustTier.Bronze;
     return TrustTier.Unrated;
+  }
+
+  /**
+   * Convert raw value with decimals back to decimal string for SDK encoding
+   * Example: value=9977n, valueDecimals=2 → "99.77"
+   * The SDK's encodeReputationValue() expects decimal strings and will re-encode correctly
+   */
+  private rawToDecimalString(value: bigint, valueDecimals: number): string {
+    if (valueDecimals === 0) return value.toString();
+
+    const str = value.toString();
+    const isNegative = str.startsWith('-');
+    const absStr = isNegative ? str.slice(1) : str;
+
+    if (absStr.length <= valueDecimals) {
+      // Need leading zeros: 0.00xxx
+      const padded = absStr.padStart(valueDecimals, '0');
+      return (isNegative ? '-' : '') + '0.' + padded;
+    }
+
+    // Insert decimal point
+    const intPart = absStr.slice(0, -valueDecimals);
+    const fracPart = absStr.slice(-valueDecimals);
+    return (isNegative ? '-' : '') + intPart + '.' + fracPart;
   }
 
   // Optional: Indexer operations

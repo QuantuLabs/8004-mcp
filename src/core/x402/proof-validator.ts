@@ -33,11 +33,16 @@ export interface ValidationOptions {
 }
 
 /**
- * Validate a proof of payment
- * Currently performs format validation only
- * Full on-chain validation can be implemented per-chain
+ * Validate a proof of payment (FORMAT ONLY)
+ *
+ * IMPORTANT: This function only validates the proof format (address formats,
+ * transaction hash format, etc.). It does NOT verify the transaction on-chain.
+ * On-chain verification would require RPC access and is not currently implemented.
+ *
+ * For production use, consider verifying proofs on-chain via the respective
+ * chain's RPC (e.g., getTransaction on Solana, eth_getTransactionReceipt on EVM).
  */
-export async function validateProof(
+export async function validateProofFormat(
   proof: X402ProofOfPayment,
   _options: ValidationOptions = {}
 ): Promise<ProofValidationResult> {
@@ -51,9 +56,7 @@ export async function validateProof(
     };
   }
 
-  // For now, return valid if format is correct
-  // Full on-chain validation would require direct RPC access
-  // which can be implemented via optional RPC configuration
+  // Format is valid, but we haven't verified on-chain
   return {
     valid: true,
     method: 'skip',
@@ -62,6 +65,12 @@ export async function validateProof(
     },
   };
 }
+
+/**
+ * @deprecated Use validateProofFormat instead. This function only validates format,
+ * not on-chain presence of the transaction.
+ */
+export const validateProof = validateProofFormat;
 
 /**
  * Check if a proof looks valid without on-chain validation

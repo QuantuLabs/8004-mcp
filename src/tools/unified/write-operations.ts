@@ -313,9 +313,7 @@ export const writeOperationHandlers: Record<string, (args: unknown) => Promise<u
 
       return successResponse({
         unsigned: false,
-        txHash: result.txHash,
-        from: result.from,
-        to: result.to,
+        txHash: result.hash,
         message: `Agent transferred to ${newOwner}`,
       });
     }

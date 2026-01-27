@@ -128,8 +128,14 @@ export interface X402FeedbackFile {
   /** Feedback creation timestamp (ISO 8601) */
   createdAt: string;
 
-  /** Feedback score (0-100) */
-  score: number;
+  /** Raw metric value (serialized as string for JSON compatibility) */
+  value: string;
+
+  /** Decimal precision (0-6), default 0 */
+  valueDecimals?: number;
+
+  /** Feedback score (0-100), optional */
+  score?: number;
 
   /** Primary tag - delivery/payment status */
   tag1: string;
@@ -157,8 +163,14 @@ export interface X402FeedbackSubmitInput {
   /** Agent ID (global format like sol:xxx or chain:chainId:tokenId) */
   agentId: string;
 
-  /** Feedback score (0-100) */
-  score: number;
+  /** Raw metric value (required) */
+  value: bigint | number;
+
+  /** Decimal precision (0-6), default 0 */
+  valueDecimals?: number;
+
+  /** Feedback score (0-100), optional */
+  score?: number;
 
   /** Primary tag (delivery/payment status) */
   tag1: string;
@@ -200,9 +212,14 @@ export interface X402FeedbackSubmitInput {
 export interface X402FeedbackSubmitSignedResult {
   unsigned: false;
   signature: string;
-  feedbackIndex?: number;
   feedbackHash: string;
   feedbackUri?: string;
+  agentId: string;
+  value: string;
+  valueDecimals: number;
+  score?: number;
+  tag1: string;
+  tag2: string;
 }
 
 /**
@@ -214,7 +231,9 @@ export interface X402FeedbackSubmitUnsignedResult {
   unsignedTx: string | X402EvmUnsignedTx;
   feedbackHash: string;
   feedbackUri?: string;
+  feedbackFile: X402FeedbackFile;
   message: string;
+  hint: string;
 }
 
 /**
@@ -252,12 +271,16 @@ export function buildCaip2Network(
 
 /**
  * Helper to build agent registry CAIP-2 identifier
+ * @throws Error if registryAddress is undefined/empty (chain not deployed)
  */
 export function buildRegistryIdentifier(
   chainType: ChainType,
   chainId: string | number,
-  registryAddress: string
+  registryAddress: string | undefined
 ): string {
+  if (!registryAddress) {
+    throw new Error(`Registry not deployed for chain ${chainType}:${chainId}`);
+  }
   const network = buildCaip2Network(chainType, chainId);
   return `${network}:${registryAddress}`;
 }
@@ -283,6 +306,8 @@ export function feedbackFileToRecord(file: X402FeedbackFile): Record<string, unk
     agentId: file.agentId,
     clientAddress: file.clientAddress,
     createdAt: file.createdAt,
+    value: file.value,
+    valueDecimals: file.valueDecimals,
     score: file.score,
     tag1: file.tag1,
     tag2: file.tag2,
