@@ -45,17 +45,34 @@ See [.env.example](./.env.example) for all available options.
 ### Quick Start
 
 ```bash
-claude mcp add 8004-mcp -- npx @quantulabs/8004-mcp
+claude mcp add 8004 npx @quantulabs/8004-mcp
 ```
 
-With configuration:
+Works on **Windows, Mac, and Linux**. No `cmd /c` or `--` needed.
+
+With environment variables:
 
 ```bash
-claude mcp add 8004-mcp \
-  -e DEFAULT_CHAIN=sol \
-  -e NETWORK_MODE=testnet \
-  -e PINATA_JWT=your-jwt \
-  -- npx @quantulabs/8004-mcp
+claude mcp add 8004 -e DEFAULT_CHAIN=sol -e NETWORK_MODE=testnet npx @quantulabs/8004-mcp
+```
+
+### Manual Configuration
+
+Edit `~/.claude.json` (or `%USERPROFILE%\.claude.json` on Windows):
+
+```json
+{
+  "mcpServers": {
+    "8004": {
+      "command": "npx",
+      "args": ["@quantulabs/8004-mcp"],
+      "env": {
+        "DEFAULT_CHAIN": "sol",
+        "NETWORK_MODE": "testnet"
+      }
+    }
+  }
+}
 ```
 
 ### Examples
@@ -325,6 +342,28 @@ Example feedback file structure:
 ```
 
 See [TOOLS.md](./TOOLS.md#x402-protocol-integration) for more details on x402 tools.
+
+## Troubleshooting
+
+### Windows: "Failed to connect" or `cmd C:/` error
+
+If you see `cmd C:/` instead of `cmd /c`, the command was parsed incorrectly.
+
+**Wrong** (causes Windows parsing bug):
+```bash
+claude mcp add 8004 -- cmd /c npx @quantulabs/8004-mcp
+```
+
+**Correct**:
+```bash
+claude mcp add 8004 npx @quantulabs/8004-mcp
+```
+
+### Server not starting
+
+1. Check logs: `claude mcp logs 8004`
+2. Verify installation: `npx @quantulabs/8004-mcp --help`
+3. Restart Claude Code after adding the server
 
 ## Development
 
