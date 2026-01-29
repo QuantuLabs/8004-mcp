@@ -45,9 +45,9 @@ export const CHAIN_CONFIGS: Record<ChainPrefix, ChainConfig> = {
       // Supabase indexer for Solana devnet
       indexerUrl: 'https://uhjytdjxvfbppgjicfly.supabase.co/rest/v1',
       registries: {
-        identity: 'HHCVWcqsziJMmp43u2UAgAfH2cBjUFxVdW1M3C3NqzvT',
-        reputation: 'HHCVWcqsziJMmp43u2UAgAfH2cBjUFxVdW1M3C3NqzvT', // Same program
-        validation: 'HHCVWcqsziJMmp43u2UAgAfH2cBjUFxVdW1M3C3NqzvT',
+        identity: '8oo4SbcgjRBAXjmGU4YMcdFqfeLLrtn7n6f358PkAc3N',
+        reputation: '8oo4SbcgjRBAXjmGU4YMcdFqfeLLrtn7n6f358PkAc3N', // Same program
+        validation: '8oo4SbcgjRBAXjmGU4YMcdFqfeLLrtn7n6f358PkAc3N',
       },
       blockExplorer: 'https://explorer.solana.com/?cluster=devnet',
     },
@@ -260,7 +260,7 @@ export const DEFAULT_INDEXER_API_KEY = 'sb_publishable_i-ycBRGiolBr8GMdiVq1rA_nw
 export const SOLANA_PROGRAM_IDS = {
   devnet: {
     agentRegistry: CHAIN_CONFIGS.sol.testnet.registries.identity,
-    atomEngine: 'B8Q2nXG7FT89Uau3n41T2qcDLAWxcaQggGqwFWGCEpr7',
+    atomEngine: 'AToMNmthLzvTy3D2kz2obFmbVCsTCmYpDw1ptWUJdeU8',
   },
   'mainnet-beta': {
     agentRegistry: CHAIN_CONFIGS.sol.mainnet.registries.identity,

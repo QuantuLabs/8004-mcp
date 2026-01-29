@@ -34,3 +34,8 @@ npm-debug.log*
 # Tests (private)
 tests/
 __mocks__/
+
+# Documentation (private)
+docs/
+test-results*/
+scripts/
