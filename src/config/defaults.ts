@@ -109,10 +109,10 @@ export const CHAIN_CONFIGS: Record<ChainPrefix, ChainConfig> = {
     mainnet: {
       chainId: 1, // Ethereum Mainnet
       rpcUrl: 'https://eth.llamarpc.com',
-      subgraphUrl: '', // TBD
+      subgraphUrl: 'https://gateway.thegraph.com/api/7fd2e7d89ce3ef24cd0d4590298f0b2c/subgraphs/id/FV6RR6y13rsnCxBAicKuQEwDp8ioEGiNaWaZUmvr1F8k',
       registries: {
-        identity: '', // TBD
-        reputation: '',
+        identity: '0x8004a6090Cd10A7288092483047B097295Fb8847',
+        reputation: '0x8004B663056A597Dffe9eCcC1965A193B7388713',
       },
       blockExplorer: 'https://etherscan.io',
     },
