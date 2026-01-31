@@ -212,7 +212,7 @@ export interface X402FeedbackSubmitInput {
 export interface X402FeedbackSubmitSignedResult {
   unsigned: false;
   signature: string;
-  feedbackHash: string;
+  feedbackFileHash: string;
   feedbackUri?: string;
   agentId: string;
   value: string;
@@ -229,7 +229,7 @@ export interface X402FeedbackSubmitUnsignedResult {
   unsigned: true;
   /** Base64 serialized transaction (Solana) or transaction object (EVM) */
   unsignedTx: string | X402EvmUnsignedTx;
-  feedbackHash: string;
+  feedbackFileHash: string;
   feedbackUri?: string;
   feedbackFile: X402FeedbackFile;
   message: string;

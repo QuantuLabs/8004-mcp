@@ -499,15 +499,16 @@ export const x402Handlers: Record<
       comment,
     };
 
-    // Calculate feedback hash (SHA-256 of canonical JSON)
+    // SEAL v1: Calculate feedback FILE hash (SHA-256 of canonical JSON)
+    // This is feedbackFileHash - the hash of the external file content
     const feedbackJson = JSON.stringify(feedbackFile, Object.keys(feedbackFile).sort());
-    const feedbackHash = createHash('sha256')
+    const feedbackFileHash = createHash('sha256')
       .update(feedbackJson)
       .digest('hex');
 
     return successResponse({
       feedbackFile: feedbackFileToRecord(feedbackFile),
-      feedbackHash: `0x${feedbackHash}`,
+      feedbackFileHash: `0x${feedbackFileHash}`,
       hint: 'Store this file on IPFS (ipfs_add_json) or HTTP, then call x402_feedback_submit with the feedbackUri.',
     });
   },
@@ -654,12 +655,13 @@ export const x402Handlers: Record<
       comment,
     };
 
-    // Calculate feedback hash (SHA-256 of canonical JSON)
+    // SEAL v1: Calculate feedback FILE hash (SHA-256 of canonical JSON)
+    // This is feedbackFileHash - the hash of the external file content
     const feedbackJson = JSON.stringify(feedbackFile, Object.keys(feedbackFile).sort());
-    const feedbackHash = createHash('sha256')
+    const feedbackFileHash = createHash('sha256')
       .update(feedbackJson)
       .digest('hex');
-    const feedbackHashBuffer = Buffer.from(feedbackHash, 'hex');
+    const feedbackFileHashBuffer = Buffer.from(feedbackFileHash, 'hex');
 
     // Determine feedbackUri - user-provided takes priority
     let feedbackUri: string | undefined = providedFeedbackUri;
@@ -687,6 +689,7 @@ export const x402Handlers: Record<
     }
 
     // Submit feedback on-chain
+    // SEAL v1: feedbackFileHash is the hash of the external file content
     const result = await (provider as IWritableChainProvider).giveFeedback(
       {
         agentId: rawId,
@@ -698,7 +701,7 @@ export const x402Handlers: Record<
         tag2,
         endpoint,
         feedbackUri,
-        feedbackHash: feedbackHashBuffer,
+        feedbackFileHash: feedbackFileHashBuffer,
       },
       { skipSend }
     );
@@ -707,7 +710,7 @@ export const x402Handlers: Record<
       return successResponse({
         unsigned: true,
         unsignedTx: result.transaction,
-        feedbackHash: `0x${feedbackHash}`,
+        feedbackFileHash: `0x${feedbackFileHash}`,
         feedbackUri,
         feedbackFile,
         message:
@@ -719,7 +722,7 @@ export const x402Handlers: Record<
     return successResponse({
       unsigned: false,
       signature: result.signature,
-      feedbackHash: `0x${feedbackHash}`,
+      feedbackFileHash: `0x${feedbackFileHash}`,
       feedbackUri,
       agentId: rawId,
       value: value.toString(),
