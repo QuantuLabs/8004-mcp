@@ -74,6 +74,7 @@ import {
 import { createAtomTools } from '../chains/solana/tools/atom.js';
 import { createWalletTools } from '../chains/solana/tools/wallet.js';
 import { createValidationTools } from '../chains/solana/tools/validation.js';
+import { createIntegrityTools } from '../chains/solana/tools/integrity.js';
 import type { SolanaStateManager } from '../chains/solana/state.js';
 
 // All unified tools
@@ -156,6 +157,7 @@ export function registerSolanaTools(
   const atomTools = createAtomTools(getState);
   const walletTools = createWalletTools(getState);
   const validationTools = createValidationTools(getState);
+  const integrityTools = createIntegrityTools(getState);
 
   // Register ATOM tools
   for (const tool of atomTools.tools) {
@@ -193,6 +195,18 @@ export function registerSolanaTools(
     }
   }
 
+  // Register integrity tools
+  for (const tool of integrityTools.tools) {
+    const handler = integrityTools.handlers[tool.name];
+    if (handler) {
+      registry.register({
+        tool,
+        handler,
+        chainType: 'solana',
+      });
+    }
+  }
+
   // Add backward compatibility aliases for Solana tools
   const solanaAliases: Record<string, string> = {
     sdk_get_atom_stats: 'solana_atom_stats_get',
@@ -209,6 +223,8 @@ export function registerSolanaTools(
     sdk_read_validation: 'solana_validation_read',
     sdk_wait_for_validation: 'solana_validation_wait',
     sdk_get_pending_validations: 'solana_validation_pending_get',
+    sdk_verify_integrity: 'solana_integrity_verify',
+    sdk_verify_integrity_deep: 'solana_integrity_verify_deep',
   };
 
   // Register aliases by looking up existing tools
