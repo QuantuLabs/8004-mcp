@@ -401,9 +401,15 @@ export class SqliteStore {
 
     const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
-    // Build ORDER BY
-    const orderColumn = params.orderBy ?? 'updated_at';
-    const orderDir = params.orderDir ?? 'desc';
+    // Build ORDER BY (whitelist columns to prevent SQL injection)
+    const VALID_ORDER_COLUMNS = ['updated_at', 'created_at', 'name', 'quality_score', 'trust_tier', 'id'] as const;
+    const VALID_ORDER_DIRS = ['asc', 'desc'] as const;
+    const orderColumn = VALID_ORDER_COLUMNS.includes(params.orderBy as typeof VALID_ORDER_COLUMNS[number])
+      ? params.orderBy
+      : 'updated_at';
+    const orderDir = VALID_ORDER_DIRS.includes(params.orderDir?.toLowerCase() as typeof VALID_ORDER_DIRS[number])
+      ? params.orderDir!.toLowerCase()
+      : 'desc';
     const orderClause = `ORDER BY ${orderColumn} ${orderDir.toUpperCase()}`;
 
     const sql = `SELECT * FROM agents ${whereClause} ${orderClause} LIMIT ? OFFSET ?`;
