@@ -422,8 +422,9 @@ export class EVMChainProvider implements IChainProvider {
     const tag2 = input.tag2 ?? '';
     const endpoint = input.endpoint ?? '';
     const feedbackUri = input.feedbackUri ?? '';
-    const feedbackHash = input.feedbackHash
-      ? (typeof input.feedbackHash === 'string' ? input.feedbackHash : `0x${Buffer.from(input.feedbackHash).toString('hex')}`)
+    // EVM contract ABI uses feedbackHash, but interface now uses feedbackFileHash
+    const feedbackHash = input.feedbackFileHash
+      ? (typeof input.feedbackFileHash === 'string' ? input.feedbackFileHash : `0x${Buffer.from(input.feedbackFileHash).toString('hex')}`)
       : '0x0000000000000000000000000000000000000000000000000000000000000000';
 
     if (skipSend) {

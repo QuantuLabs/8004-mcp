@@ -389,7 +389,8 @@ export class SolanaChainProvider implements IChainProvider {
     const sdk = this.state.getSdk();
     const assetPubkey = new PublicKey(input.agentId);
 
-    // Build GiveFeedbackParams (SDK v0.5.0 format)
+    // Build GiveFeedbackParams (SDK v0.6.0 SEAL v1 format)
+    // SEAL v1: feedbackFileHash is optional, seal_hash is computed on-chain
     const feedbackParams = {
       value: typeof input.value === 'bigint' ? input.value : BigInt(input.value),
       valueDecimals: input.valueDecimals ?? 0,
@@ -398,7 +399,7 @@ export class SolanaChainProvider implements IChainProvider {
       tag2: input.tag2,
       endpoint: input.endpoint,
       feedbackUri: input.feedbackUri ?? '',
-      feedbackHash: input.feedbackHash ?? Buffer.alloc(32),
+      feedbackFileHash: input.feedbackFileHash, // Optional, undefined if not provided
     };
 
     const result = await sdk.giveFeedback(assetPubkey, feedbackParams, { skipSend });
