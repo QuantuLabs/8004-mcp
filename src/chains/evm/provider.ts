@@ -189,6 +189,13 @@ export class EVMChainProvider implements IChainProvider {
           {
             owners: params.owner ? [params.owner as `0x${string}`] : undefined,
             name: nameFilter,
+            // Advanced SDK filters
+            mcpTools: params.mcpTools,
+            a2aSkills: params.a2aSkills,
+            active: params.active,
+            x402support: params.x402support,
+            mcp: params.hasMcp,
+            a2a: params.hasA2a,
           },
           fetchLimit,
           offset
@@ -240,9 +247,54 @@ export class EVMChainProvider implements IChainProvider {
       // Fallback to SDK (may use RPC)
       const sdk = this.getSdk();
 
-      // Note: agent0-sdk uses cursor-based pagination, not offset-based.
-      // For offset>0, we need to iterate through pages to skip results.
-      // This is inefficient for large offsets but maintains API compatibility.
+      // SDK uses cursor-based pagination. When cursor is provided, use it directly
+      // for efficient O(1) pagination. Without cursor, offset requires O(N) iteration.
+      if (params.cursor) {
+        // Efficient path: use provided cursor directly
+        const results = await sdk.searchAgents(
+          {
+            owners: params.owner ? [params.owner] : undefined,
+            name: nameFilter,
+            // Advanced SDK filters
+            mcpTools: params.mcpTools,
+            a2aSkills: params.a2aSkills,
+            active: params.active,
+            x402support: params.x402support,
+            mcp: params.hasMcp,
+            a2a: params.hasA2a,
+          },
+          {
+            pageSize: limit,
+            cursor: params.cursor,
+          }
+        );
+
+        return {
+          results: results.items.map((a: AgentSummary) => ({
+            id: a.agentId,
+            globalId: toGlobalId(this.chainPrefix, a.agentId, String(this.config.chainId)),
+            chainType: 'evm' as const,
+            chainPrefix: this.chainPrefix,
+            name: a.name ?? `Agent #${a.agentId}`,
+            owner: a.owners?.[0] ?? '',
+          })),
+          total: results.items.length,
+          hasMore: !!results.nextCursor,
+          offset,
+          limit,
+          cursor: results.nextCursor, // Return cursor for next page
+        };
+      }
+
+      // Legacy path: offset-based pagination (O(N) for large offsets)
+      // Warning logged for deep offsets to encourage cursor usage
+      if (offset > 100) {
+        console.warn(
+          `[EVMChainProvider] Large offset (${offset}) with SDK pagination is O(N). ` +
+          `Use cursor-based pagination for better performance.`
+        );
+      }
+
       let cursor: string | undefined;
       let allItems: AgentSummary[] = [];
 
@@ -252,6 +304,13 @@ export class EVMChainProvider implements IChainProvider {
           {
             owners: params.owner ? [params.owner] : undefined,
             name: nameFilter,
+            // Advanced SDK filters
+            mcpTools: params.mcpTools,
+            a2aSkills: params.a2aSkills,
+            active: params.active,
+            x402support: params.x402support,
+            mcp: params.hasMcp,
+            a2a: params.hasA2a,
           },
           {
             pageSize: Math.min(100, limit + offset), // Fetch more to handle offset
@@ -284,6 +343,7 @@ export class EVMChainProvider implements IChainProvider {
         hasMore: allItems.length > offset + limit || !!cursor,
         offset,
         limit,
+        cursor, // Return cursor for efficient next-page fetching
       };
     } catch (err) {
       console.warn('EVMChainProvider.searchAgents error:', err);

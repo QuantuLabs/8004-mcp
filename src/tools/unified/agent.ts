@@ -5,6 +5,8 @@ import {
   getArgs,
   readString,
   readNumber,
+  readBoolean,
+  readStringArray,
   parseChainParam,
   parsePagination,
 } from '../../core/parsers/common.js';
@@ -52,7 +54,7 @@ export const agentTools: Tool[] = [
   },
   {
     name: 'agent_search',
-    description: 'Search agents across chains with filters. Supports smart search by name, description/capabilities, or endpoint.',
+    description: 'Search agents across chains with advanced filters. Supports search by name, capabilities, MCP tools, A2A skills, and more.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -96,6 +98,33 @@ export const agentTools: Tool[] = [
         minTrustTier: {
           type: 'number',
           description: 'Minimum trust tier (0-4)',
+        },
+        // Advanced SDK filters (EVM)
+        mcpTools: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Filter by MCP tools (agent must have ALL listed tools)',
+        },
+        a2aSkills: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Filter by A2A skills (agent must have ALL listed skills)',
+        },
+        active: {
+          type: 'boolean',
+          description: 'Filter by active status (true=active only, false=inactive only)',
+        },
+        x402support: {
+          type: 'boolean',
+          description: 'Filter by x402 payment support',
+        },
+        hasMcp: {
+          type: 'boolean',
+          description: 'Filter by has MCP endpoint',
+        },
+        hasA2a: {
+          type: 'boolean',
+          description: 'Filter by has A2A endpoint',
         },
         limit: {
           type: 'number',
@@ -210,6 +239,13 @@ export const agentHandlers: Record<string, (args: unknown) => Promise<unknown>> 
     const minQualityScore = readNumber(input, 'minQualityScore');
     const minTrustTier = readNumber(input, 'minTrustTier');
     const { limit, offset } = parsePagination(input);
+    // Advanced SDK filters (EVM)
+    const mcpTools = readStringArray(input, 'mcpTools');
+    const a2aSkills = readStringArray(input, 'a2aSkills');
+    const active = readBoolean(input, 'active');
+    const x402support = readBoolean(input, 'x402support');
+    const hasMcp = readBoolean(input, 'hasMcp');
+    const hasA2a = readBoolean(input, 'hasA2a');
 
     // Build search params with specific field queries
     const searchParams = {
@@ -224,6 +260,13 @@ export const agentHandlers: Record<string, (args: unknown) => Promise<unknown>> 
       minTrustTier,
       limit,
       offset,
+      // Advanced SDK filters
+      mcpTools,
+      a2aSkills,
+      active,
+      x402support,
+      hasMcp,
+      hasA2a,
     };
 
     // If specific chain requested (not "all"), search that chain only

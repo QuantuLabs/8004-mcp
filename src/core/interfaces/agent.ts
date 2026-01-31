@@ -78,8 +78,23 @@ export interface ISearchParams {
   minTrustTier?: number;
   limit?: number;
   offset?: number;
+  /** Cursor for efficient pagination (use instead of offset when available) */
+  cursor?: string;
   orderBy?: 'name' | 'qualityScore' | 'totalFeedbacks' | 'createdAt' | 'updatedAt';
   orderDir?: 'asc' | 'desc';
+  // Advanced SDK filters (EVM only)
+  /** Filter by specific MCP tools (agent must have ALL listed tools) */
+  mcpTools?: string[];
+  /** Filter by specific A2A skills (agent must have ALL listed skills) */
+  a2aSkills?: string[];
+  /** Filter by active status */
+  active?: boolean;
+  /** Filter by x402 payment support */
+  x402support?: boolean;
+  /** Filter by has MCP endpoint */
+  hasMcp?: boolean;
+  /** Filter by has A2A endpoint */
+  hasA2a?: boolean;
 }
 
 export interface ISearchResult {
@@ -88,6 +103,8 @@ export interface ISearchResult {
   hasMore: boolean;
   offset: number;
   limit: number;
+  /** Cursor for next page (when available). Pass to next search for efficient pagination. */
+  cursor?: string;
 }
 
 // Global ID utilities
