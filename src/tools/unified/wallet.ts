@@ -5,6 +5,7 @@ import { getArgs, readString, readStringOptional } from '../../core/parsers/comm
 import { successResponse } from '../../core/serializers/common.js';
 import { getWalletManager, type WalletChainType } from '../../core/wallet/index.js';
 import { globalState } from '../../state/global-state.js';
+import { wrapHandler } from '../../core/errors/mcp-error.js';
 import type { SolanaChainProvider } from '../../chains/solana/provider.js';
 import type { EVMChainProvider } from '../../chains/evm/provider.js';
 
@@ -208,7 +209,8 @@ export const walletTools: Tool[] = [
   },
 ];
 
-export const walletHandlers: Record<string, (args: unknown) => Promise<unknown>> = {
+// Internal handlers (unwrapped)
+const _walletHandlers: Record<string, (args: unknown) => Promise<unknown>> = {
   wallet_list: async () => {
     const manager = getWalletManager();
     const result = await manager.list();
@@ -471,6 +473,14 @@ export const walletHandlers: Record<string, (args: unknown) => Promise<unknown>>
     });
   },
 };
+
+// Export wrapped handlers with error handling
+export const walletHandlers: Record<string, (args: unknown) => Promise<unknown>> = Object.fromEntries(
+  Object.entries(_walletHandlers).map(([name, handler]) => [
+    name,
+    wrapHandler(handler, `wallet operation (${name})`)
+  ])
+);
 
 // Tool aliases for backward compatibility
 export const walletAliases: Record<string, string> = {

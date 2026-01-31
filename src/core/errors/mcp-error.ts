@@ -37,6 +37,12 @@ export enum McpErrorCode {
   // Config errors (7xxx)
   CONFIG_INVALID = 7000,
   CONFIG_MISSING_REQUIRED = 7001,
+
+  // Wallet errors (8xxx)
+  WALLET_ERROR = 8000,
+  WALLET_NOT_FOUND = 8001,
+  WALLET_LOCKED = 8002,
+  WALLET_INVALID_PASSWORD = 8003,
 }
 
 export class McpError extends Error {
@@ -117,4 +123,61 @@ export function indexerNotAvailableError(chainId: string): McpError {
     `Indexer not available for chain: ${chainId}`,
     { chainId }
   );
+}
+
+export function walletError(message: string, details?: Record<string, unknown>): McpError {
+  return new McpError(
+    McpErrorCode.WALLET_ERROR,
+    message,
+    details
+  );
+}
+
+/**
+ * Wrap a handler function with error handling
+ * Converts unexpected errors to McpError with sanitized message
+ */
+export function wrapHandler<T>(
+  handler: (args: unknown) => Promise<T>,
+  context: string
+): (args: unknown) => Promise<T> {
+  return async (args: unknown): Promise<T> => {
+    try {
+      return await handler(args);
+    } catch (error) {
+      // Re-throw McpError as-is
+      if (error instanceof McpError) {
+        throw error;
+      }
+
+      // Convert known error types
+      if (error instanceof Error) {
+        // Check for common wallet-related errors
+        const msg = error.message.toLowerCase();
+        if (msg.includes('wallet') && msg.includes('not found')) {
+          throw new McpError(McpErrorCode.WALLET_NOT_FOUND, error.message);
+        }
+        if (msg.includes('invalid password') || msg.includes('wrong password')) {
+          throw new McpError(McpErrorCode.WALLET_INVALID_PASSWORD, error.message);
+        }
+        if (msg.includes('wallet') && msg.includes('locked')) {
+          throw new McpError(McpErrorCode.WALLET_LOCKED, error.message);
+        }
+
+        // Generic error with context
+        throw new McpError(
+          McpErrorCode.UNKNOWN,
+          `${context}: ${error.message}`,
+          { originalError: error.name }
+        );
+      }
+
+      // Unknown error type
+      throw new McpError(
+        McpErrorCode.UNKNOWN,
+        `${context}: An unexpected error occurred`,
+        { errorType: typeof error }
+      );
+    }
+  };
 }
