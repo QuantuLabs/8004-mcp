@@ -152,6 +152,14 @@ export const writeOperationTools: Tool[] = [
           type: 'number',
           description: 'Index of the feedback to revoke',
         },
+        client: {
+          type: 'string',
+          description: 'Client address who gave feedback (required for Solana to lookup seal hash)',
+        },
+        sealHash: {
+          type: 'string',
+          description: 'SEAL hash (base64 or hex). Computed on-chain during giveFeedback. If not provided, will be fetched from indexer.',
+        },
         chain: {
           type: 'string',
           description: 'Chain prefix',
@@ -183,6 +191,10 @@ export const writeOperationTools: Tool[] = [
         feedbackIndex: {
           type: 'number',
           description: 'Index of the feedback',
+        },
+        sealHash: {
+          type: 'string',
+          description: 'SEAL hash (base64 or hex). Computed on-chain during giveFeedback. If not provided, will be fetched from indexer.',
         },
         responseUri: {
           type: 'string',
@@ -458,6 +470,8 @@ export const writeOperationHandlers: Record<string, (args: unknown) => Promise<u
     const input = getArgs(args);
     const id = readString(input, 'id', true);
     const feedbackIndex = readNumber(input, 'feedbackIndex', true);
+    const clientStr = readString(input, 'client');
+    const sealHashStr = readString(input, 'sealHash');
     const { chainPrefix } = parseChainParam(input);
     const skipSend = readBoolean(input, 'skipSend') ?? false;
 
@@ -480,7 +494,27 @@ export const writeOperationHandlers: Record<string, (args: unknown) => Promise<u
       const sdk = provider.getState().getSdk();
       const assetPubkey = new PublicKey(rawId);
 
-      const result = await sdk.revokeFeedback(assetPubkey, feedbackIndex, { skipSend });
+      // Get sealHash - either from parameter or fetch from indexer
+      let sealHash: Buffer;
+      if (sealHashStr) {
+        sealHash = parseBuffer(sealHashStr, 'sealHash');
+      } else {
+        // Fetch from indexer - requires client address
+        if (!clientStr) {
+          throw new Error('Either sealHash or client address is required to revoke feedback');
+        }
+        const clientPubkey = new PublicKey(clientStr);
+        const feedback = await sdk.readFeedback(assetPubkey, clientPubkey, feedbackIndex);
+        if (!feedback) {
+          throw new Error(`Feedback not found: agent=${rawId}, client=${clientStr}, index=${feedbackIndex}`);
+        }
+        if (!feedback.sealHash) {
+          throw new Error('Seal hash not available from indexer. Please provide sealHash parameter.');
+        }
+        sealHash = feedback.sealHash;
+      }
+
+      const result = await sdk.revokeFeedback(assetPubkey, feedbackIndex, sealHash, { skipSend });
 
       if (skipSend && 'transaction' in result) {
         return successResponse({
@@ -520,6 +554,7 @@ export const writeOperationHandlers: Record<string, (args: unknown) => Promise<u
     const id = readString(input, 'id', true);
     const client = readString(input, 'client', true);
     const feedbackIndex = readNumber(input, 'feedbackIndex', true);
+    const sealHashStr = readString(input, 'sealHash');
     const responseUri = readString(input, 'responseUri', true);
     const responseHashStr = readString(input, 'responseHash');
     const { chainPrefix } = parseChainParam(input);
@@ -546,10 +581,27 @@ export const writeOperationHandlers: Record<string, (args: unknown) => Promise<u
       const clientPubkey = new PublicKey(client);
       const responseHash = responseHashStr ? parseBuffer(responseHashStr, 'responseHash') : undefined;
 
+      // Get sealHash - either from parameter or fetch from indexer
+      let sealHash: Buffer;
+      if (sealHashStr) {
+        sealHash = parseBuffer(sealHashStr, 'sealHash');
+      } else {
+        // Fetch from indexer
+        const feedback = await sdk.readFeedback(assetPubkey, clientPubkey, feedbackIndex);
+        if (!feedback) {
+          throw new Error(`Feedback not found: agent=${rawId}, client=${client}, index=${feedbackIndex}`);
+        }
+        if (!feedback.sealHash) {
+          throw new Error('Seal hash not available from indexer. Please provide sealHash parameter.');
+        }
+        sealHash = feedback.sealHash;
+      }
+
       const result = await sdk.appendResponse(
         assetPubkey,
         clientPubkey,
         feedbackIndex,
+        sealHash,
         responseUri,
         responseHash,
         { skipSend }

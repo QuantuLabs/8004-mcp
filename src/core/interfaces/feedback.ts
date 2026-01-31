@@ -28,7 +28,11 @@ export interface IFeedbackInput {
   tag2?: string;
   endpoint?: string;
   feedbackUri?: string;
-  feedbackHash?: Buffer;
+  /**
+   * SEAL v1: Optional hash of the feedback file content (32 bytes).
+   * The on-chain seal_hash is computed from all parameters including this.
+   */
+  feedbackFileHash?: Buffer;
 }
 
 export interface IFeedbackQuery {
