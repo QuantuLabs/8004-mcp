@@ -1,6 +1,6 @@
 // EVM chain provider implementation with agent0-sdk
 
-import { encodeFunctionData } from 'viem';
+import { encodeFunctionData, formatUnits } from 'viem';
 import {
   SDK as Agent0SDK,
   SubgraphClient,
@@ -152,7 +152,7 @@ export class EVMChainProvider implements IChainProvider {
         updatedAt: Date.now(),
       };
     } catch (err) {
-      console.warn(`EVMChainProvider.getAgent error: ${err}`);
+      console.warn('EVMChainProvider.getAgent error:', err);
       return null;
     }
   }
@@ -286,7 +286,7 @@ export class EVMChainProvider implements IChainProvider {
         limit,
       };
     } catch (err) {
-      console.warn(`EVMChainProvider.searchAgents error: ${err}`);
+      console.warn('EVMChainProvider.searchAgents error:', err);
       return {
         results: [],
         total: 0,
@@ -323,7 +323,7 @@ export class EVMChainProvider implements IChainProvider {
         chainType: 'evm',
       };
     } catch (err) {
-      console.warn(`EVMChainProvider.getFeedback error: ${err}`);
+      console.warn('EVMChainProvider.getFeedback error:', err);
       return null;
     }
   }
@@ -396,7 +396,7 @@ export class EVMChainProvider implements IChainProvider {
         hasMore: false, // searchFeedback doesn't support pagination yet
       };
     } catch (err) {
-      console.warn(`EVMChainProvider.listFeedbacks error: ${err}`);
+      console.warn('EVMChainProvider.listFeedbacks error:', err);
       return { feedbacks: [], total: 0, hasMore: false };
     }
   }
@@ -493,7 +493,7 @@ export class EVMChainProvider implements IChainProvider {
         averageScore: summary.averageValue,
       };
     } catch (err) {
-      console.warn(`EVMChainProvider.getReputationSummary error: ${err}`);
+      console.warn('EVMChainProvider.getReputationSummary error:', err);
       return null;
     }
   }
@@ -512,22 +512,7 @@ export class EVMChainProvider implements IChainProvider {
    * The SDK's encodeReputationValue() expects decimal strings and will re-encode correctly
    */
   private rawToDecimalString(value: bigint, valueDecimals: number): string {
-    if (valueDecimals === 0) return value.toString();
-
-    const str = value.toString();
-    const isNegative = str.startsWith('-');
-    const absStr = isNegative ? str.slice(1) : str;
-
-    if (absStr.length <= valueDecimals) {
-      // Need leading zeros: 0.00xxx
-      const padded = absStr.padStart(valueDecimals, '0');
-      return (isNegative ? '-' : '') + '0.' + padded;
-    }
-
-    // Insert decimal point
-    const intPart = absStr.slice(0, -valueDecimals);
-    const fracPart = absStr.slice(-valueDecimals);
-    return (isNegative ? '-' : '') + intPart + '.' + fracPart;
+    return formatUnits(value, valueDecimals);
   }
 
   // Optional: Indexer operations
