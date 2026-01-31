@@ -39,3 +39,6 @@ __mocks__/
 docs/
 test-results*/
 scripts/
+
+# Test artifacts
+test-ledger/
