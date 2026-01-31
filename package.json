@@ -31,7 +31,7 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",
     "@solana/web3.js": "^1.95.0",
-    "8004-solana": "file:../agent0-ts-solana",
+    "8004-solana": "^0.5.3",
     "agent0-sdk": "^1.4.2",
     "argon2": "^0.44.0",
     "better-sqlite3": "^11.0.0",

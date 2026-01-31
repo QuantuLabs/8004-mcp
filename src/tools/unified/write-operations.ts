@@ -494,10 +494,10 @@ export const writeOperationHandlers: Record<string, (args: unknown) => Promise<u
       const sdk = provider.getState().getSdk();
       const assetPubkey = new PublicKey(rawId);
 
-      // Get sealHash - either from parameter or fetch from indexer
-      let sealHash: Buffer;
+      // Get feedbackHash - either from parameter or fetch from indexer
+      let feedbackHash: Buffer;
       if (sealHashStr) {
-        sealHash = parseBuffer(sealHashStr, 'sealHash');
+        feedbackHash = parseBuffer(sealHashStr, 'sealHash');
       } else {
         // Fetch from indexer - requires client address
         if (!clientStr) {
@@ -508,13 +508,13 @@ export const writeOperationHandlers: Record<string, (args: unknown) => Promise<u
         if (!feedback) {
           throw new Error(`Feedback not found: agent=${rawId}, client=${clientStr}, index=${feedbackIndex}`);
         }
-        if (!feedback.sealHash) {
-          throw new Error('Seal hash not available from indexer. Please provide sealHash parameter.');
+        if (!feedback.feedbackHash) {
+          throw new Error('Feedback hash not available from indexer. Please provide sealHash parameter.');
         }
-        sealHash = feedback.sealHash;
+        feedbackHash = feedback.feedbackHash;
       }
 
-      const result = await sdk.revokeFeedback(assetPubkey, feedbackIndex, sealHash, { skipSend });
+      const result = await sdk.revokeFeedback(assetPubkey, feedbackIndex, feedbackHash, { skipSend });
 
       if (skipSend && 'transaction' in result) {
         return successResponse({
@@ -581,27 +581,27 @@ export const writeOperationHandlers: Record<string, (args: unknown) => Promise<u
       const clientPubkey = new PublicKey(client);
       const responseHash = responseHashStr ? parseBuffer(responseHashStr, 'responseHash') : undefined;
 
-      // Get sealHash - either from parameter or fetch from indexer
-      let sealHash: Buffer;
+      // Get feedbackHash - either from parameter or fetch from indexer
+      let feedbackHash: Buffer;
       if (sealHashStr) {
-        sealHash = parseBuffer(sealHashStr, 'sealHash');
+        feedbackHash = parseBuffer(sealHashStr, 'sealHash');
       } else {
         // Fetch from indexer
         const feedback = await sdk.readFeedback(assetPubkey, clientPubkey, feedbackIndex);
         if (!feedback) {
           throw new Error(`Feedback not found: agent=${rawId}, client=${client}, index=${feedbackIndex}`);
         }
-        if (!feedback.sealHash) {
-          throw new Error('Seal hash not available from indexer. Please provide sealHash parameter.');
+        if (!feedback.feedbackHash) {
+          throw new Error('Feedback hash not available from indexer. Please provide sealHash parameter.');
         }
-        sealHash = feedback.sealHash;
+        feedbackHash = feedback.feedbackHash;
       }
 
       const result = await sdk.appendResponse(
         assetPubkey,
         clientPubkey,
         feedbackIndex,
-        sealHash,
+        feedbackHash,
         responseUri,
         responseHash,
         { skipSend }
