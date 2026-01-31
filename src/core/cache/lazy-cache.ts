@@ -4,9 +4,8 @@
 import { SlimStore, type ISlimCacheConfig } from './slim-store.js';
 import type { IAgentSummary, ISearchResult, ChainPrefix } from '../interfaces/agent.js';
 
-export interface ILazyCacheConfig extends ISlimCacheConfig {
-  // No background sync config needed
-}
+// Lazy cache uses same config as SlimStore
+export type ILazyCacheConfig = ISlimCacheConfig;
 
 export class LazyCache {
   private readonly store: SlimStore;
