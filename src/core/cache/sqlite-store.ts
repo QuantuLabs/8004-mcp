@@ -82,13 +82,32 @@ export interface IUpsertAgent {
 
 const DEFAULT_CACHE_DIR = join(homedir(), '.8004-mcp');
 const DEFAULT_DB_NAME = 'cache.db';
+const DEFAULT_MMAP_SIZE = 268435456; // 256MB
+const DEFAULT_CACHE_SIZE = -64000; // 64MB (negative = KB)
+
+export interface ISqliteStoreOptions {
+  dbPath?: string;
+  /** Memory-mapped I/O size in bytes (default: 256MB). Set lower for constrained environments. */
+  mmapSize?: number;
+  /** SQLite cache size. Negative = KB, positive = pages (default: -64000 = 64MB). */
+  cacheSize?: number;
+}
 
 export class SqliteStore {
   private db: Database.Database;
   private readonly dbPath: string;
+  private readonly mmapSize: number;
+  private readonly cacheSize: number;
 
-  constructor(dbPath?: string) {
-    this.dbPath = dbPath ?? join(DEFAULT_CACHE_DIR, DEFAULT_DB_NAME);
+  constructor(options?: ISqliteStoreOptions | string) {
+    // Support legacy string constructor for backwards compatibility
+    if (typeof options === 'string') {
+      options = { dbPath: options };
+    }
+
+    this.dbPath = options?.dbPath ?? join(DEFAULT_CACHE_DIR, DEFAULT_DB_NAME);
+    this.mmapSize = options?.mmapSize ?? DEFAULT_MMAP_SIZE;
+    this.cacheSize = options?.cacheSize ?? DEFAULT_CACHE_SIZE;
 
     // Ensure directory exists
     const dir = this.dbPath.substring(0, this.dbPath.lastIndexOf('/'));
@@ -112,8 +131,8 @@ export class SqliteStore {
     // Enable WAL mode for better concurrent read performance
     this.db.pragma('journal_mode = WAL');
     this.db.pragma('synchronous = NORMAL');
-    this.db.pragma('mmap_size = 268435456'); // 256MB
-    this.db.pragma('cache_size = -64000'); // 64MB
+    this.db.pragma(`mmap_size = ${this.mmapSize}`);
+    this.db.pragma(`cache_size = ${this.cacheSize}`);
 
     // Create tables
     this.db.exec(`

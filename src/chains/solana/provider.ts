@@ -123,6 +123,13 @@ export class SolanaChainProvider implements IChainProvider {
             limit: searchLimit,
             offset: 0, // Start from 0, apply offset after filtering
           });
+          // Warn if results are truncated (helps users understand incomplete results)
+          if (results.length === searchLimit) {
+            console.warn(
+              `[SolanaChainProvider] Client-side search hit ${searchLimit} agent limit. ` +
+              `Results may be incomplete. Consider using more specific filters.`
+            );
+          }
           // Will apply client-side pagination after filtering
         } else {
           // No filters: use normal pagination
@@ -215,10 +222,15 @@ export class SolanaChainProvider implements IChainProvider {
           offset,
           limit,
         };
-      } catch {
+      } catch (err) {
         if (!this.state.config.indexerFallback) {
           throw new Error('Indexer query failed and fallback is disabled');
         }
+        // Log warning when falling back to on-chain (helps debugging indexer issues)
+        console.warn(
+          `[SolanaChainProvider] Indexer query failed, falling back to on-chain:`,
+          err instanceof Error ? err.message : String(err)
+        );
       }
     }
 
