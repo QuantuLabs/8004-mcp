@@ -275,10 +275,13 @@ class GlobalState {
   stop(): void {
     if (this._legacyCache) {
       this._legacyCache.stop();
+      this._legacyCache = null;
     }
     if (this._lazyCache) {
       this._lazyCache.stop();
+      this._lazyCache = null;
     }
+    this._initialized = false;
   }
 
   // Helpers
