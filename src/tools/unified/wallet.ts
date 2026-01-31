@@ -346,7 +346,9 @@ const _walletHandlers: Record<string, (args: unknown) => Promise<unknown>> = {
       chainType: result.chainType,
       address: result.address,
       status: 'unlocked',
+      sessionToken: result.sessionToken,
       message: result.message,
+      hint: 'Use sessionToken for subsequent operations instead of password.',
     });
   },
 
@@ -398,12 +400,14 @@ const _walletHandlers: Record<string, (args: unknown) => Promise<unknown>> = {
     const exportPassword = readStringOptional(input, 'exportPassword');
 
     const manager = getWalletManager();
-    const exportData = await manager.export(name, password, exportPassword ?? undefined);
+    const result = await manager.export(name, password, exportPassword ?? undefined);
 
+    // Return file path only - encrypted data is NEVER returned in response
     return successResponse({
-      name,
-      message: 'Wallet exported successfully. Save this encrypted backup securely.',
-      encryptedWallet: exportData,
+      name: result.name,
+      exportPath: result.exportPath,
+      message: result.message,
+      warning: 'The backup file contains your encrypted private key. Delete it after copying to secure storage.',
     });
   },
 

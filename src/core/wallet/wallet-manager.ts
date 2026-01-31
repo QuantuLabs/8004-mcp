@@ -77,6 +77,13 @@ export interface WalletUnlockResult {
   name: string;
   chainType: WalletChainType;
   address: string;
+  sessionToken: string; // Use this token instead of password for subsequent operations
+  message: string;
+}
+
+export interface WalletExportResult {
+  name: string;
+  exportPath: string; // File path instead of encrypted data
   message: string;
 }
 
@@ -101,18 +108,41 @@ interface WalletSession {
   wallet: UnlockedWallet;
   timer: ReturnType<typeof setTimeout>;
   lastActivity: number;
+  sessionToken: string; // Secure random token for password-less operations
 }
 
 export class WalletManager {
   private readonly walletDir: string;
   private readonly walletsPath: string;
+  private readonly exportsPath: string;
   private unlockedWallets: Map<string, UnlockedWallet> = new Map();
   private walletSessions: Map<string, WalletSession> = new Map();
+  private sessionTokens: Map<string, string> = new Map(); // token -> walletName
   private autoLockMs: number = DEFAULT_AUTO_LOCK_MS;
 
   constructor(walletDir?: string) {
     this.walletDir = walletDir ?? join(homedir(), '.8004-mcp');
     this.walletsPath = join(this.walletDir, 'wallets');
+    this.exportsPath = join(this.walletDir, 'exports');
+  }
+
+  // Generate secure session token (32 bytes = 256 bits)
+  private generateSessionToken(): string {
+    return randomBytes(32).toString('base64url');
+  }
+
+  // Validate session token and return wallet name
+  validateSessionToken(token: string): string | null {
+    return this.sessionTokens.get(token) ?? null;
+  }
+
+  // Revoke session token (called on lock)
+  private revokeSessionToken(walletName: string): void {
+    for (const [token, name] of this.sessionTokens.entries()) {
+      if (name === walletName) {
+        this.sessionTokens.delete(token);
+      }
+    }
   }
 
   // Configure auto-lock timeout (in milliseconds)
@@ -400,6 +430,10 @@ export class WalletManager {
       });
     }
 
+    // Generate session token for auto-unlocked wallet
+    const sessionToken = this.generateSessionToken();
+    this.sessionTokens.set(sessionToken, name);
+
     // Create session with auto-lock timer
     const wallet = this.unlockedWallets.get(name)!;
     const timer = setTimeout(() => this.autoLockWallet(name), this.autoLockMs);
@@ -407,6 +441,7 @@ export class WalletManager {
       wallet,
       timer,
       lastActivity: Date.now(),
+      sessionToken,
     });
 
     return {
@@ -513,6 +548,10 @@ export class WalletManager {
       });
     }
 
+    // Generate session token for auto-unlocked wallet
+    const sessionToken = this.generateSessionToken();
+    this.sessionTokens.set(sessionToken, name);
+
     // Create session with auto-lock timer
     const importedWallet = this.unlockedWallets.get(name)!;
     const importTimer = setTimeout(() => this.autoLockWallet(name), this.autoLockMs);
@@ -520,6 +559,7 @@ export class WalletManager {
       wallet: importedWallet,
       timer: importTimer,
       lastActivity: Date.now(),
+      sessionToken,
     });
 
     return {
@@ -601,16 +641,18 @@ export class WalletManager {
       throw new Error(`Wallet "${name}" not found. Use wallet_list to see available wallets.`);
     }
 
-    // Already unlocked? Refresh timer and return
+    // Already unlocked? Refresh timer and return existing token
     if (this.unlockedWallets.has(name)) {
       const wallet = this.unlockedWallets.get(name)!;
+      const session = this.walletSessions.get(name);
       this.refreshAutoLock(name);
       const timeoutMinutes = Math.round(this.autoLockMs / 60000);
       return {
         name: wallet.name,
         chainType: wallet.chainType,
         address: wallet.address,
-        message: `Wallet "${name}" is already unlocked. Timer refreshed (${timeoutMinutes} min).`,
+        sessionToken: session?.sessionToken ?? this.generateSessionToken(),
+        message: `Wallet "${name}" is already unlocked. Timer refreshed (${timeoutMinutes} min). Use sessionToken for subsequent operations.`,
       };
     }
 
@@ -680,6 +722,10 @@ export class WalletManager {
     // Clear sensitive data from decryption
     secretKey.fill(0);
 
+    // Generate session token
+    const sessionToken = this.generateSessionToken();
+    this.sessionTokens.set(sessionToken, name);
+
     // Create session with auto-lock timer
     const wallet = this.unlockedWallets.get(name)!;
     const timer = setTimeout(() => this.autoLockWallet(name), this.autoLockMs);
@@ -687,6 +733,7 @@ export class WalletManager {
       wallet,
       timer,
       lastActivity: Date.now(),
+      sessionToken,
     });
 
     const timeoutMinutes = Math.round(this.autoLockMs / 60000);
@@ -694,11 +741,12 @@ export class WalletManager {
       name: walletFile.name,
       chainType: walletFile.chainType,
       address: walletFile.address,
-      message: `Wallet "${name}" unlocked successfully. Auto-locks after ${timeoutMinutes} min of inactivity.`,
+      sessionToken,
+      message: `Wallet "${name}" unlocked. Use sessionToken for subsequent operations (expires after ${timeoutMinutes} min of inactivity).`,
     };
   }
 
-  // Lock a specific wallet (securely wipes memory)
+  // Lock a specific wallet (securely wipes memory and revokes token)
   lock(name: string): boolean {
     const session = this.walletSessions.get(name);
     if (session) {
@@ -706,6 +754,8 @@ export class WalletManager {
       this.secureWipe(session.wallet);
       this.walletSessions.delete(name);
     }
+    // Revoke session token
+    this.revokeSessionToken(name);
     if (this.unlockedWallets.has(name)) {
       this.unlockedWallets.delete(name);
       return true;
@@ -713,7 +763,7 @@ export class WalletManager {
     return false;
   }
 
-  // Lock all wallets (securely wipes all memory)
+  // Lock all wallets (securely wipes all memory and revokes all tokens)
   lockAll(): number {
     // Clear all timers and wipe memory
     for (const [, session] of this.walletSessions.entries()) {
@@ -721,6 +771,7 @@ export class WalletManager {
       this.secureWipe(session.wallet);
     }
     this.walletSessions.clear();
+    this.sessionTokens.clear(); // Revoke all tokens
 
     const count = this.unlockedWallets.size;
     this.unlockedWallets.clear();
@@ -804,59 +855,77 @@ export class WalletManager {
     return null;
   }
 
-  // Export wallet as encrypted backup
-  async export(name: string, currentPassword: string, exportPassword?: string): Promise<string> {
+  // Export wallet as encrypted backup to file (not returned in response for security)
+  async export(name: string, currentPassword: string, exportPassword?: string): Promise<WalletExportResult> {
     // First unlock to verify password
     if (!this.isUnlocked(name)) {
       await this.unlock(name, currentPassword);
     }
 
-    // Read current file and return it (optionally re-encrypt with new password)
+    // Read current file
     const walletFile = await this.readWalletFile(name);
     if (!walletFile) {
       throw new Error('Failed to read wallet file.');
     }
 
-    // If export password is the same or not provided, return current file
+    let exportData: EncryptedWalletFile;
+
+    // If export password is the same or not provided, use current file
     if (!exportPassword || exportPassword === currentPassword) {
-      return JSON.stringify(walletFile, null, 2);
-    }
-
-    // Re-encrypt with new password
-    const wallet = this.getUnlockedWallet(name);
-    let secretKey: Uint8Array;
-
-    if (wallet.chainType === 'solana' && wallet.solanaKeypair) {
-      secretKey = wallet.solanaKeypair.secretKey;
-    } else if (wallet.chainType === 'evm' && wallet.evmAccount) {
-      // Need to extract private key from account - not directly accessible
-      // We'll need to re-derive from the current encrypted state
-      const salt = Buffer.from(walletFile.salt, 'base64');
-      const nonce = Buffer.from(walletFile.nonce, 'base64');
-      const authTag = Buffer.from(walletFile.authTag, 'base64');
-      const ciphertext = Buffer.from(walletFile.ciphertext, 'base64');
-      const key = await this.deriveKey(currentPassword, salt);
-      secretKey = this.decrypt(ciphertext, key, nonce, authTag);
+      exportData = walletFile;
     } else {
-      throw new Error('Cannot export wallet.');
+      // Re-encrypt with new password
+      const wallet = this.getUnlockedWallet(name);
+      let secretKey: Uint8Array;
+
+      if (wallet.chainType === 'solana' && wallet.solanaKeypair) {
+        secretKey = wallet.solanaKeypair.secretKey;
+      } else if (wallet.chainType === 'evm' && wallet.evmAccount) {
+        // Re-derive from the current encrypted state
+        const salt = Buffer.from(walletFile.salt, 'base64');
+        const nonce = Buffer.from(walletFile.nonce, 'base64');
+        const authTag = Buffer.from(walletFile.authTag, 'base64');
+        const ciphertext = Buffer.from(walletFile.ciphertext, 'base64');
+        const key = await this.deriveKey(currentPassword, salt);
+        secretKey = this.decrypt(ciphertext, key, nonce, authTag);
+      } else {
+        throw new Error('Cannot export wallet.');
+      }
+
+      // Generate new salt/nonce for export
+      const salt = randomBytes(SALT_LENGTH);
+      const nonce = randomBytes(NONCE_LENGTH);
+      const key = await this.deriveKey(exportPassword, salt);
+      const { ciphertext, authTag } = this.encrypt(secretKey, key, nonce);
+
+      exportData = {
+        ...walletFile,
+        salt: salt.toString('base64'),
+        nonce: nonce.toString('base64'),
+        authTag: authTag.toString('base64'),
+        ciphertext: ciphertext.toString('base64'),
+        updatedAt: new Date().toISOString(),
+      };
     }
 
-    // Generate new salt/nonce for export
-    const salt = randomBytes(SALT_LENGTH);
-    const nonce = randomBytes(NONCE_LENGTH);
-    const key = await this.deriveKey(exportPassword, salt);
-    const { ciphertext, authTag } = this.encrypt(secretKey, key, nonce);
+    // Ensure exports directory exists
+    await fs.mkdir(this.exportsPath, { recursive: true, mode: 0o700 });
 
-    const exportData: EncryptedWalletFile = {
-      ...walletFile,
-      salt: salt.toString('base64'),
-      nonce: nonce.toString('base64'),
-      authTag: authTag.toString('base64'),
-      ciphertext: ciphertext.toString('base64'),
-      updatedAt: new Date().toISOString(),
+    // Write to file with timestamp (never return encrypted data in response)
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const exportFileName = `${name}-${timestamp}.backup`;
+    const exportPath = join(this.exportsPath, exportFileName);
+
+    await fs.writeFile(exportPath, JSON.stringify(exportData, null, 2), {
+      encoding: 'utf8',
+      mode: 0o600, // Restricted permissions
+    });
+
+    return {
+      name,
+      exportPath,
+      message: `Wallet exported to: ${exportPath}. Keep this backup secure and delete after copying to safe storage.`,
     };
-
-    return JSON.stringify(exportData, null, 2);
   }
 
   // Delete wallet (requires password confirmation)
