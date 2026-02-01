@@ -98,7 +98,8 @@ export const CHAIN_CONFIGS: Record<ChainPrefix, ChainConfig> = {
     displayName: 'Ethereum',
     testnet: {
       chainId: 11155111, // Sepolia
-      rpcUrl: 'https://rpc.sepolia.org',
+      // Primary: PublicNode (reliable). Alternatives: 1rpc.io/sepolia, sepolia.drpc.org
+      rpcUrl: 'https://ethereum-sepolia-rpc.publicnode.com',
       subgraphUrl: 'https://gateway.thegraph.com/api/00a452ad3cd1900273ea62c1bf283f93/subgraphs/id/6wQRC7geo9XYAhckfmfo8kbMRLeWU8KQd3XsJqFKmZLT',
       registries: {
         identity: '0x8004a6090Cd10A7288092483047B097295Fb8847',
@@ -108,7 +109,8 @@ export const CHAIN_CONFIGS: Record<ChainPrefix, ChainConfig> = {
     },
     mainnet: {
       chainId: 1, // Ethereum Mainnet
-      rpcUrl: 'https://eth.llamarpc.com',
+      // Primary: PublicNode (reliable, no rate limit). Alternatives: 1rpc.io/eth, eth.drpc.org
+      rpcUrl: 'https://ethereum-rpc.publicnode.com',
       subgraphUrl: 'https://gateway.thegraph.com/api/7fd2e7d89ce3ef24cd0d4590298f0b2c/subgraphs/id/FV6RR6y13rsnCxBAicKuQEwDp8ioEGiNaWaZUmvr1F8k',
       registries: {
         identity: '0x8004a6090Cd10A7288092483047B097295Fb8847',
@@ -162,7 +164,8 @@ export const CHAIN_CONFIGS: Record<ChainPrefix, ChainConfig> = {
     },
     mainnet: {
       chainId: 137, // Polygon PoS
-      rpcUrl: 'https://polygon-rpc.com',
+      // Primary: PublicNode (reliable). Alternatives: 1rpc.io/matic, polygon-rpc.com
+      rpcUrl: 'https://polygon-bor-rpc.publicnode.com',
       subgraphUrl: '', // TBD
       registries: {
         identity: '', // TBD
