@@ -1,6 +1,6 @@
 {
   "name": "@quantulabs/8004-mcp",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Multi-chain MCP for 8004 Agent Registry Standard (Solana + EVM)",
   "type": "module",
   "main": "dist/index.js",
@@ -26,6 +26,8 @@
     "test:e2e:solana": "RUN_E2E=true vitest run tests/e2e/solana.e2e.test.ts",
     "test:e2e:evm": "RUN_E2E=true vitest run tests/e2e/evm.e2e.test.ts",
     "test:e2e:registry": "RUN_E2E=true vitest run tests/e2e/registry.e2e.test.ts",
+    "test:novice": "tsx scripts/e2e-full-coverage.ts",
+    "test:novice:quick": "tsx scripts/e2e-quick-test.ts",
     "lint": "eslint src/ tests/",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist coverage",
