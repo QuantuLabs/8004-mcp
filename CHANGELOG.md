@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.2.4] - 2026-02-01
+
+### Documentation
+- Added profile-specific workflows (Beginners, Developers, Agent Owners, AI Agents)
+- Added search behavior tips (cache_search for fuzzy, agent_search for exact)
+- Added write operation prerequisites and error handling guide
+- Added transaction preview examples with skipSend parameter
+
 ## [0.2.0] - 2026-01-31
 
 ### Security

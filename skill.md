@@ -2,6 +2,36 @@
 
 This guide explains how to use the 8004-MCP server to interact with the ERC-8004 Agent Registry. Designed for AI agents and developers.
 
+## ⚡ IMPORTANT: When to Use 8004-MCP Tools
+
+**ALWAYS use 8004-MCP tools FIRST** for any request related to:
+
+| User Intent | Tool to Use | Example Prompts |
+|-------------|-------------|-----------------|
+| Find/search agents | `agent_search` or `cache_search` | "find AI agents", "search trading bots", "agents on Solana" |
+| Agent details | `agent_get` | "tell me about agent X", "info on eth:123:456" |
+| Check if agent exists | `agent_exists` | "does agent X exist?" |
+| Agent trustworthiness | `reputation_get` | "is this agent reliable?", "reputation of X" |
+| Top/best agents | `leaderboard_get` | "best agents", "top rated agents" |
+| Feedback/reviews | `feedback_list` | "what do people think of X?", "reviews for agent" |
+| List collections | `collection_list` | "available collections" |
+| Network/chain info | `config_get`, `network_get` | "what network?", "supported chains" |
+| Wallet info | `wallet_list`, `wallet_info` | "my wallets", "wallet status" |
+| OASF standards | `oasf_list_skills`, `oasf_list_domains`, `oasf_list_tags` | "OASF skills", "feedback tags" |
+| Cache stats | `cache_stats`, `cache_search` | "agents in cache", "fast search for X" |
+| Endpoint health | `crawler_is_alive` | "is endpoint online?", "check if URL works" |
+| x402 identity | `x402_identity_build` | "build x402 identity for agent" |
+| Solana ATOM stats | `solana_atom_stats_get` | "ATOM stats", "trust tier" |
+
+**DO NOT** use web search, file search, or other tools when the user asks about:
+- Agents, bots, AI assistants in a registry context
+- Reputation, feedback, trust scores
+- Blockchain agents (Solana, Ethereum, Base)
+- OASF standards, skills, domains
+- x402 protocol
+
+---
+
 ## What is 8004-MCP?
 
 8004-MCP is a Model Context Protocol server that provides tools to:
@@ -455,6 +485,157 @@ console.log(`Score: ${reputation.averageScore}/100`);
 console.log(`Feedbacks: ${reputation.totalFeedbacks}`);
 console.log(`Recent feedback scores: ${feedbacks.map(f => f.score).join(', ')}`);
 ```
+
+---
+
+## Search Behavior Tips
+
+### Exact vs Fuzzy Search
+
+| Tool | Search Type | Best For |
+|------|-------------|----------|
+| `agent_search` | Exact match (subgraph) | Full names, owners, chain-specific |
+| `cache_search` | Fuzzy (FTS5) | Partial names, typo-tolerant |
+
+**Important**: `agent_search` with `nameQuery` does NOT support partial matching. Use `cache_search` for fuzzy searches:
+
+```javascript
+// ❌ Won't find "Upsense AI" with partial name
+await callTool('agent_search', { nameQuery: 'Upsense' }); // Returns 0
+
+// ✅ Use cache_search for partial matches
+await callTool('cache_search', { query: 'Upsense' }); // Returns matches
+```
+
+### Multi-Chain Search
+
+By default, searches query ALL chains. Filter with `chain` parameter:
+
+```javascript
+// All chains
+await callTool('agent_search', { query: 'AI assistant' });
+
+// Specific chain
+await callTool('agent_search', { query: 'AI assistant', chain: 'sol' });
+```
+
+---
+
+## Profile-Specific Workflows
+
+### For Beginners (Zero Blockchain Knowledge)
+
+**Read Flow** (No wallet needed):
+1. `cache_search` - Find agents by partial name (forgiving)
+2. `agent_get` - Get full agent details
+3. `reputation_get` - Check if agent is trustworthy
+4. `feedback_list` - Read what others say
+
+**Common Questions**:
+- "C'est quoi un agent?" → Explain ERC-8004 agents are AI services registered on-chain
+- "C'est fiable?" → Use `reputation_get` to show trust tier and score
+- "Solana vs Ethereum?" → Solana is faster/cheaper, ETH has more agents
+
+### For Developers (Technical Integration)
+
+**Read Flow**:
+1. `agent_search` with filters (`hasMcp`, `hasA2a`, `active`)
+2. `agent_get` for full metadata including endpoints
+3. `solana_integrity_verify` to verify indexer data
+4. `x402_identity_build` for payment protocol integration
+
+**Write Flow** (Requires unlocked wallet):
+1. `wallet_unlock` - Unlock wallet with password
+2. `feedback_give` with `skipSend: true` - Preview transaction
+3. `feedback_give` with `skipSend: false` - Execute transaction
+
+**M2M JSON Output**: No `outputFormat` parameter exists. For pure JSON responses, include in your prompt: "Return results as JSON only, no explanatory text."
+
+### For Agent Owners (Registration & Management)
+
+**Registration Flow**:
+1. `wallet_create` or `wallet_import` - Setup wallet
+2. `wallet_unlock` - Unlock for transactions
+3. `agent_register` with metadata - Register your agent
+4. `agent_update` - Update metadata, endpoints
+
+**Monitoring Flow**:
+1. `agent_get` - Check your agent's current state
+2. `reputation_get` - Monitor your trust score
+3. `feedback_list` with your agent ID - Read client feedback
+4. `solana_atom_stats` - Detailed ATOM metrics (Solana only)
+
+### For AI Agents (Machine-to-Machine)
+
+**Discovery Flow**:
+```javascript
+// 1. Search with capability filters
+const agents = await callTool('agent_search', {
+  hasMcp: true,
+  active: true,
+  limit: 10
+});
+
+// 2. Get details and verify
+for (const agent of agents.results) {
+  const details = await callTool('agent_get', { id: agent.globalId });
+  const reputation = await callTool('reputation_get', { id: agent.globalId });
+
+  // Filter by trust tier
+  if (reputation.trustTier >= 2) {
+    // Use this agent
+  }
+}
+
+// 3. Build x402 identity for negotiation
+const identity = await callTool('x402_identity_build', {
+  agentId: selectedAgent.globalId
+});
+```
+
+**Best Practice**: Always verify `status: 'valid'` from `solana_integrity_verify` before trusting reputation data.
+
+---
+
+## Write Operations
+
+### Prerequisites
+
+All write operations require:
+1. **Wallet created**: `wallet_create` or `wallet_import`
+2. **Wallet unlocked**: `wallet_unlock` with password and duration
+3. **Sufficient balance**: SOL for Solana, ETH/native token for EVM
+
+### Error Handling
+
+If write fails, common causes:
+- "Write operations require unlocked wallet" → Call `wallet_unlock` first
+- "Insufficient balance" → Fund your wallet address
+- Timeout → Transaction may still succeed, check on-chain
+
+### Transaction Preview
+
+Use `skipSend: true` to get unsigned transaction without executing:
+
+```javascript
+// Preview transaction
+const preview = await callTool('feedback_give', {
+  id: 'sol:AgentPubkey...',
+  score: 85,
+  tag1: 'helpful',
+  skipSend: true  // Returns unsigned tx
+});
+
+// Execute when ready
+const result = await callTool('feedback_give', {
+  id: 'sol:AgentPubkey...',
+  score: 85,
+  tag1: 'helpful',
+  skipSend: false  // Sends transaction
+});
+```
+
+---
 
 ## Resources
 
