@@ -96,7 +96,7 @@ export interface UnlockedWallet {
   // Chain-specific key access
   solanaKeypair?: Keypair;
   evmAccount?: PrivateKeyAccount;
-  evmPrivateKey?: `0x${string}`; // Store hex private key for SDK initialization
+  evmPrivateKeyBytes?: Uint8Array; // Store as bytes for secure wipe capability
 }
 
 // Auto-lock configuration
@@ -187,10 +187,12 @@ export class WalletManager {
         secretKey[i] = 0;
       }
     }
-    // Overwrite EVM private key string (limited in JS, but try)
-    if (wallet.evmPrivateKey) {
-      // TypeScript won't let us mutate, but we can delete the reference
-      (wallet as unknown as Record<string, unknown>).evmPrivateKey = undefined;
+    // Overwrite EVM private key bytes with zeros (now works since it's Uint8Array)
+    if (wallet.evmPrivateKeyBytes) {
+      for (let i = 0; i < wallet.evmPrivateKeyBytes.length; i++) {
+        wallet.evmPrivateKeyBytes[i] = 0;
+      }
+      (wallet as unknown as Record<string, unknown>).evmPrivateKeyBytes = undefined;
     }
     if (wallet.evmAccount) {
       (wallet as unknown as Record<string, unknown>).evmAccount = undefined;
@@ -420,13 +422,15 @@ export class WalletManager {
     } else {
       const privateKeyHex = `0x${Buffer.from(secretKey).toString('hex')}` as `0x${string}`;
       const account = privateKeyToAccount(privateKeyHex);
+      // Store as Uint8Array for secure wipe capability
+      const keyBytes = new Uint8Array(secretKey);
       this.unlockedWallets.set(name, {
         name,
         chainType,
         address,
         publicKey,
         evmAccount: account,
-        evmPrivateKey: privateKeyHex,
+        evmPrivateKeyBytes: keyBytes,
       });
     }
 
@@ -538,13 +542,15 @@ export class WalletManager {
     } else {
       const privateKeyHex = `0x${Buffer.from(secretKey).toString('hex')}` as `0x${string}`;
       const account = privateKeyToAccount(privateKeyHex);
+      // Store as Uint8Array for secure wipe capability
+      const keyBytes = new Uint8Array(secretKey);
       this.unlockedWallets.set(name, {
         name,
         chainType,
         address,
         publicKey,
         evmAccount: account,
-        evmPrivateKey: privateKeyHex,
+        evmPrivateKeyBytes: keyBytes,
       });
     }
 
@@ -709,13 +715,15 @@ export class WalletManager {
         throw new Error('Wallet integrity check failed.');
       }
 
+      // Store as Uint8Array for secure wipe capability
+      const keyBytes = new Uint8Array(secretKey);
       this.unlockedWallets.set(name, {
         name: walletFile.name,
         chainType: walletFile.chainType,
         address: walletFile.address,
         publicKey: walletFile.publicKey,
         evmAccount: account,
-        evmPrivateKey: privateKeyHex,
+        evmPrivateKeyBytes: keyBytes,
       });
     }
 
@@ -846,10 +854,12 @@ export class WalletManager {
   }
 
   // Get any unlocked EVM private key (for SDK initialization)
+  // Converts from secure Uint8Array storage to hex format when needed
   getAnyUnlockedEvmPrivateKey(): `0x${string}` | null {
     for (const wallet of this.unlockedWallets.values()) {
-      if (wallet.chainType === 'evm' && wallet.evmPrivateKey) {
-        return wallet.evmPrivateKey;
+      if (wallet.chainType === 'evm' && wallet.evmPrivateKeyBytes) {
+        // Convert bytes to hex on demand
+        return `0x${Buffer.from(wallet.evmPrivateKeyBytes).toString('hex')}` as `0x${string}`;
       }
     }
     return null;

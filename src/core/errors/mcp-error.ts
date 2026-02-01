@@ -134,6 +134,31 @@ export function walletError(message: string, details?: Record<string, unknown>):
 }
 
 /**
+ * Sanitize error messages to prevent sensitive data leakage
+ * Removes potential private keys, tokens, and other sensitive patterns
+ */
+function sanitizeErrorMessage(message: string): string {
+  let sanitized = message;
+
+  // Remove 64-char hex strings (potential EVM private keys)
+  sanitized = sanitized.replace(/\b(0x)?[0-9a-fA-F]{64}\b/g, '[REDACTED_KEY]');
+
+  // Remove base58 strings that look like Solana private keys (87-88 chars)
+  sanitized = sanitized.replace(/\b[1-9A-HJ-NP-Za-km-z]{87,88}\b/g, '[REDACTED_KEY]');
+
+  // Remove base64 encoded 32-byte keys (44 chars ending in =)
+  sanitized = sanitized.replace(/\b[A-Za-z0-9+/]{43}=\b/g, '[REDACTED_KEY]');
+
+  // Remove JWT-like tokens (three base64 segments separated by dots)
+  sanitized = sanitized.replace(/\b[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b/g, '[REDACTED_TOKEN]');
+
+  // Remove API keys (common patterns like sk-..., pk_..., etc.)
+  sanitized = sanitized.replace(/\b(sk|pk|api|key|token|secret|password)[-_][A-Za-z0-9]{20,}\b/gi, '[REDACTED_KEY]');
+
+  return sanitized;
+}
+
+/**
  * Wrap a handler function with error handling
  * Converts unexpected errors to McpError with sanitized message
  */
@@ -152,22 +177,25 @@ export function wrapHandler<T>(
 
       // Convert known error types
       if (error instanceof Error) {
+        // Sanitize the error message to prevent sensitive data leakage
+        const sanitizedMessage = sanitizeErrorMessage(error.message);
+
         // Check for common wallet-related errors
-        const msg = error.message.toLowerCase();
+        const msg = sanitizedMessage.toLowerCase();
         if (msg.includes('wallet') && msg.includes('not found')) {
-          throw new McpError(McpErrorCode.WALLET_NOT_FOUND, error.message);
+          throw new McpError(McpErrorCode.WALLET_NOT_FOUND, sanitizedMessage);
         }
         if (msg.includes('invalid password') || msg.includes('wrong password')) {
-          throw new McpError(McpErrorCode.WALLET_INVALID_PASSWORD, error.message);
+          throw new McpError(McpErrorCode.WALLET_INVALID_PASSWORD, sanitizedMessage);
         }
         if (msg.includes('wallet') && msg.includes('locked')) {
-          throw new McpError(McpErrorCode.WALLET_LOCKED, error.message);
+          throw new McpError(McpErrorCode.WALLET_LOCKED, sanitizedMessage);
         }
 
         // Generic error with context
         throw new McpError(
           McpErrorCode.UNKNOWN,
-          `${context}: ${error.message}`,
+          `${context}: ${sanitizedMessage}`,
           { originalError: error.name }
         );
       }
