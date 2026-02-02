@@ -43,7 +43,9 @@ import { getWalletManager } from '../../core/wallet/index.js';
  */
 function extractTokenId(agentId: string): string {
   if (agentId.includes(':')) {
-    return agentId.split(':').pop()!;
+    const lastPart = agentId.split(':').pop();
+    // Handle edge case of trailing colon (e.g., "738:")
+    return lastPart && lastPart.length > 0 ? lastPart : agentId.split(':')[0] ?? agentId;
   }
   return agentId;
 }
@@ -483,8 +485,7 @@ export class EVMChainProvider implements IChainProvider {
 
     // Prepare feedback parameters
     // agentId can be "tokenId" or "chainId:tokenId" format - extract just the token ID
-    const rawAgentId = input.agentId.includes(':') ? input.agentId.split(':').pop()! : input.agentId;
-    const agentId = BigInt(rawAgentId);
+    const agentId = BigInt(extractTokenId(input.agentId));
     const value = typeof input.value === 'bigint' ? input.value : BigInt(input.value);
     const valueDecimals = input.valueDecimals ?? 0;
     const tag1 = input.tag1 ?? '';
