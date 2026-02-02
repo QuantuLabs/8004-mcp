@@ -187,9 +187,10 @@ Switched to mainnet. Active chains:
 - Ethereum: mainnet (chainId: 1)
 ```
 
-## Tools
+## Documentation
 
-See [TOOLS.md](./TOOLS.md) for the complete list of 60+ available tools.
+- [TOOLS.md](./TOOLS.md) - Complete tool reference (60+ tools)
+- [skill.md](./skill.md) - AI agent integration guide (search tips, workflows, write ops)
 
 ## Global ID Format
 

@@ -14,6 +14,7 @@
 - Cursor-based pagination for EVM chains
 
 ### Documentation
+- Added [skill.md](./skill.md) integration guide for AI agents
 - Profile-specific workflows (Beginners, Developers, Agent Owners, AI Agents)
 - Search behavior tips (cache_search for fuzzy, agent_search for exact)
 - Write operation prerequisites and error handling guide
