@@ -176,9 +176,58 @@ await client.callTool({ name: 'agent_register', arguments: {
   name: 'My Agent',
   description: 'Does cool stuff',
   tokenUri: 'ipfs://Qm...',  // Metadata URI
-  skipSend: false
+  skipSend: false,
+  estimateCost: false        // Set true to get cost estimate without executing
 }});
 ```
+
+---
+
+## Cost Estimation (estimateCost)
+
+Get accurate cost estimates before registering. No wallet required.
+
+```typescript
+// Solana cost estimate
+const estimate = await client.callTool({ name: 'agent_register', arguments: {
+  chain: 'sol',
+  estimateCost: true
+}});
+// Returns:
+// {
+//   estimated: true,
+//   chain: 'solana',
+//   breakdown: {
+//     agentAccountRent: { lamports: 2068605, sol: 0.002068 },
+//     metaplexAssetRent: { lamports: 1392000, sol: 0.001392 },
+//     transactionFee: { lamports: 5000, sol: 0.000005 },
+//     priorityFeeBuffer: { lamports: 10000, sol: 0.00001 }
+//   },
+//   total: { lamports: 3475605, sol: 0.003475 },
+//   recommended: { lamports: 4170726, sol: 0.004170, description: '20% buffer' }
+// }
+
+// EVM cost estimate
+const evmEstimate = await client.callTool({ name: 'agent_register', arguments: {
+  chain: 'base',
+  estimateCost: true
+}});
+// Returns:
+// {
+//   estimated: true,
+//   chain: 'base',
+//   chainId: 84532,
+//   breakdown: {
+//     gasPrice: { wei: '1000000000', gwei: 1 },
+//     estimatedGas: { units: '300000' },
+//     gasCost: { wei: '300000000000000', eth: 0.0003 }
+//   },
+//   total: { wei: '300000000000000', eth: 0.0003 },
+//   recommended: { wei: '390000000000000', eth: 0.00039, description: '30% buffer' }
+// }
+```
+
+Use `recommended` value to ensure transaction succeeds even with gas price fluctuations.
 
 ---
 

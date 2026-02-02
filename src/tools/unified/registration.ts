@@ -11,7 +11,9 @@ import { successResponse } from '../../core/serializers/common.js';
 import { globalState } from '../../state/global-state.js';
 import type { SolanaChainProvider } from '../../chains/solana/provider.js';
 import type { EVMChainProvider } from '../../chains/evm/provider.js';
-import { PublicKey } from '@solana/web3.js';
+import { PublicKey, LAMPORTS_PER_SOL } from '@solana/web3.js';
+import { ACCOUNT_SIZES, calculateRentExempt } from '8004-solana';
+import { createPublicClient, http, formatEther } from 'viem';
 
 export const registrationTools: Tool[] = [
   {
@@ -56,6 +58,10 @@ export const registrationTools: Tool[] = [
           type: 'boolean',
           description: 'If true, returns unsigned transaction instead of sending',
         },
+        estimateCost: {
+          type: 'boolean',
+          description: 'If true, returns cost estimation without executing. Includes rent, gas, and total in native token.',
+        },
       },
     },
   },
@@ -95,9 +101,19 @@ export const registrationHandlers: Record<string, (args: unknown) => Promise<unk
     const a2aEndpoint = readString(input, 'a2aEndpoint');
     const { chainPrefix } = parseChainParam(input);
     const skipSend = readBoolean(input, 'skipSend') ?? false;
+    const estimateCost = readBoolean(input, 'estimateCost') ?? false;
 
     // Determine which chain to use
     const targetChain = chainPrefix || globalState.chains.getDefault()?.chainPrefix || 'sol';
+
+    // Cost estimation mode
+    if (estimateCost) {
+      if (targetChain === 'sol') {
+        return estimateSolanaCost();
+      } else {
+        return estimateEvmCost(targetChain);
+      }
+    }
 
     if (targetChain === 'sol') {
       return registerSolanaAgent({ tokenUri, collection, skipSend });
@@ -266,6 +282,154 @@ async function registerEvmAgent(params: {
     message: `Agent registered successfully on ${chainPrefix}.`,
     registrationFile,
   });
+}
+
+// Cost estimation for Solana
+async function estimateSolanaCost(): Promise<unknown> {
+  const provider = globalState.chains.getByPrefix('sol') as SolanaChainProvider | null;
+  if (!provider) {
+    throw new Error('Solana provider not available');
+  }
+
+  // Metaplex Core NFT account size (approximate)
+  const METAPLEX_CORE_ASSET_SIZE = 200; // Base asset account
+
+  // Calculate rent for each account
+  const agentAccountRent = calculateRentExempt(ACCOUNT_SIZES.agentAccount);
+  const metaplexAssetRent = calculateRentExempt(METAPLEX_CORE_ASSET_SIZE);
+
+  // Transaction fee (typically 5000 lamports, but can vary)
+  const estimatedTxFee = 5000;
+
+  // Priority fee buffer (for congested network)
+  const priorityFeeBuffer = 10000;
+
+  // Total in lamports
+  const totalLamports = agentAccountRent + metaplexAssetRent + estimatedTxFee + priorityFeeBuffer;
+  const totalSol = totalLamports / LAMPORTS_PER_SOL;
+
+  // Recommended balance (add 20% buffer)
+  const recommendedLamports = Math.ceil(totalLamports * 1.2);
+  const recommendedSol = recommendedLamports / LAMPORTS_PER_SOL;
+
+  return successResponse({
+    estimated: true,
+    chain: 'solana',
+    network: provider.getConfig().displayName,
+    breakdown: {
+      agentAccountRent: {
+        lamports: agentAccountRent,
+        sol: agentAccountRent / LAMPORTS_PER_SOL,
+        description: `Rent for AgentAccount PDA (${ACCOUNT_SIZES.agentAccount} bytes)`,
+      },
+      metaplexAssetRent: {
+        lamports: metaplexAssetRent,
+        sol: metaplexAssetRent / LAMPORTS_PER_SOL,
+        description: `Rent for Metaplex Core NFT (~${METAPLEX_CORE_ASSET_SIZE} bytes)`,
+      },
+      transactionFee: {
+        lamports: estimatedTxFee,
+        sol: estimatedTxFee / LAMPORTS_PER_SOL,
+        description: 'Base transaction fee',
+      },
+      priorityFeeBuffer: {
+        lamports: priorityFeeBuffer,
+        sol: priorityFeeBuffer / LAMPORTS_PER_SOL,
+        description: 'Priority fee buffer for congested network',
+      },
+    },
+    total: {
+      lamports: totalLamports,
+      sol: totalSol,
+    },
+    recommended: {
+      lamports: recommendedLamports,
+      sol: recommendedSol,
+      description: 'Total with 20% safety buffer',
+    },
+    message: `Estimated cost: ${totalSol.toFixed(6)} SOL. Recommended balance: ${recommendedSol.toFixed(6)} SOL`,
+  });
+}
+
+// Cost estimation for EVM
+async function estimateEvmCost(chainPrefix: string): Promise<unknown> {
+  const provider = globalState.chains.getByPrefix(chainPrefix as 'eth' | 'base' | 'arb' | 'poly' | 'op') as EVMChainProvider | null;
+  if (!provider) {
+    throw new Error(`EVM provider not available for chain: ${chainPrefix}`);
+  }
+
+  const sdk = provider.getSdk();
+  const chainId = await sdk.chainId();
+
+  // Get RPC URL from config
+  const config = provider.getConfig();
+  const rpcUrl = config.rpcUrl;
+
+  // Create public client to get gas price
+  const publicClient = createPublicClient({
+    transport: http(rpcUrl),
+  });
+
+  // Get current gas price
+  const gasPrice = await publicClient.getGasPrice();
+
+  // Estimated gas for agent registration (NFT mint + storage)
+  // Based on typical agent0-sdk registration: ~250k-350k gas
+  const estimatedGas = BigInt(300000);
+
+  // Calculate cost
+  const gasCostWei = gasPrice * estimatedGas;
+  const gasCostEth = formatEther(gasCostWei);
+
+  // Recommended (add 30% buffer for gas price fluctuation)
+  const recommendedWei = (gasCostWei * BigInt(130)) / BigInt(100);
+  const recommendedEth = formatEther(recommendedWei);
+
+  // Get native token name
+  const nativeToken = getNativeToken(chainPrefix);
+
+  return successResponse({
+    estimated: true,
+    chain: chainPrefix,
+    chainId,
+    breakdown: {
+      gasPrice: {
+        wei: gasPrice.toString(),
+        gwei: Number(gasPrice / BigInt(1e9)),
+        description: 'Current gas price',
+      },
+      estimatedGas: {
+        units: estimatedGas.toString(),
+        description: 'Estimated gas units for registration (~300k)',
+      },
+      gasCost: {
+        wei: gasCostWei.toString(),
+        [nativeToken.toLowerCase()]: parseFloat(gasCostEth),
+        description: 'Gas cost at current price',
+      },
+    },
+    total: {
+      wei: gasCostWei.toString(),
+      [nativeToken.toLowerCase()]: parseFloat(gasCostEth),
+    },
+    recommended: {
+      wei: recommendedWei.toString(),
+      [nativeToken.toLowerCase()]: parseFloat(recommendedEth),
+      description: 'Total with 30% buffer for gas price fluctuation',
+    },
+    message: `Estimated cost: ${parseFloat(gasCostEth).toFixed(6)} ${nativeToken}. Recommended balance: ${parseFloat(recommendedEth).toFixed(6)} ${nativeToken}`,
+  });
+}
+
+function getNativeToken(chainPrefix: string): string {
+  const tokens: Record<string, string> = {
+    eth: 'ETH',
+    base: 'ETH',
+    arb: 'ETH',
+    op: 'ETH',
+    poly: 'MATIC',
+  };
+  return tokens[chainPrefix] ?? 'ETH';
 }
 
 // Backward compatibility aliases
