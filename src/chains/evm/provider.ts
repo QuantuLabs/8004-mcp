@@ -35,7 +35,7 @@ import type {
 } from '../../core/interfaces/reputation.js';
 import { TrustTier, getTrustTierName } from '../../core/interfaces/reputation.js';
 import { matchesSearchFilter } from '../../core/utils/search-filter.js';
-import { getWalletManager } from '../../core/wallet/index.js';
+import { getWalletStore } from '../../core/wallet/index.js';
 
 /**
  * Extract just the tokenId from an agentId that may include chainId prefix
@@ -90,8 +90,8 @@ export class EVMChainProvider implements IChainProvider {
   // Get or create SDK instance (public for registration tools)
   getSdk(): Agent0SDK {
     if (!this._sdk) {
-      const walletManager = getWalletManager();
-      const privateKey = this.config.privateKey ?? walletManager.getAnyUnlockedEvmPrivateKey();
+      const walletStore = getWalletStore();
+      const privateKey = this.config.privateKey ?? walletStore.getAnyEvmPrivateKey();
 
       const sdkConfig: SDKConfig = {
         chainId: this.config.chainId,
@@ -131,7 +131,7 @@ export class EVMChainProvider implements IChainProvider {
   }
 
   canWrite(): boolean {
-    return !!(this.config.privateKey || getWalletManager().getAnyUnlockedEvmAccount());
+    return !!(this.config.privateKey || getWalletStore().getAnyEvmAccount());
   }
 
   getConfig(): IChainConfig {

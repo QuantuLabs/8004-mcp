@@ -4,7 +4,7 @@ import { Keypair } from '@solana/web3.js';
 import { SolanaSDK, IndexerClient, type IPFSClient } from '8004-solana';
 import type { IPFSClientConfig } from '8004-solana';
 import { DEFAULT_SOLANA_CLUSTER, DEFAULT_INDEXER_URL, DEFAULT_INDEXER_API_KEY } from '../../config/defaults.js';
-import { getWalletManager } from '../../core/wallet/index.js';
+import { getWalletStore } from '../../core/wallet/index.js';
 import { globalState } from '../../state/global-state.js';
 
 // Note: 8004-solana SDK currently only supports 'devnet'
@@ -113,8 +113,8 @@ export class SolanaStateManager {
     if (this._keypair) {
       return this._keypair;
     }
-    // Check wallet manager for any unlocked Solana keypair
-    return getWalletManager().getAnyUnlockedSolanaKeypair() ?? undefined;
+    // Check wallet store for any unlocked Solana keypair
+    return getWalletStore().getAnySolanaKeypair() ?? undefined;
   }
 
   setKeypair(keypair: Keypair | undefined): void {

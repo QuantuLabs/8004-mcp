@@ -137,22 +137,25 @@ await client.callTool({ name: 'solana_integrity_verify', arguments: {
 
 ### Write Operations (Wallet required)
 
-#### Wallet Setup Flow
+#### Wallet Store Setup (Master Password)
 ```typescript
-// 1. Create wallet (one-time)
+// 1. Initialize store (one-time) - SAVE THE MASTER PASSWORD!
+await client.callTool({ name: 'wallet_store_init', arguments: {
+  password: 'MySecureMaster123!'
+}});
+
+// 2. Create wallets (stored in encrypted store)
 await client.callTool({ name: 'wallet_create', arguments: {
-  name: 'my-wallet',
-  chainType: 'solana',  // or 'evm'
-  password: 'secure-password-123'  // SAVE THIS!
+  name: 'my-solana',
+  chainType: 'solana'  // or 'evm'
 }});
 
-// 2. Unlock before write operations
-await client.callTool({ name: 'wallet_unlock', arguments: {
-  name: 'my-wallet',
-  password: 'secure-password-123'
+// 3. On new session, unlock store with master password
+await client.callTool({ name: 'wallet_store_unlock', arguments: {
+  password: 'MySecureMaster123!'
 }});
 
-// 3. Now write operations work
+// 4. Now write operations work (all wallets unlocked)
 ```
 
 #### feedback_give
@@ -335,8 +338,9 @@ await client.callTool({ name: 'x402_feedback_submit', arguments: {
 
 | Error | Cause | Solution |
 |-------|-------|----------|
-| `WALLET_LOCKED` | Write op without unlock | Call `wallet_unlock` |
-| `INVALID_PASSWORD` | Wrong password | Check password (cannot recover if lost) |
+| `STORE_LOCKED` | Write op without unlock | Call `wallet_store_unlock` with master password |
+| `STORE_NOT_INITIALIZED` | No wallet store | Call `wallet_store_init` first |
+| `INVALID_PASSWORD` | Wrong master password | Check password (cannot recover if lost) |
 | `AGENT_NOT_FOUND` | Invalid ID | Verify global ID format |
 | `INSUFFICIENT_BALANCE` | Wallet empty | Fund wallet address |
 | `PROVIDER_NOT_AVAILABLE` | Chain not initialized | Check `network_get` |
@@ -389,17 +393,21 @@ await client.callTool({ name: 'oasf_list_tags', arguments: {} });
 - `collection_create` - Create collection (Solana, write)
 - `collection_uri_update` - Update collection URI (Solana, write)
 
+### Wallet Store (Master Password)
+- `wallet_store_init` - Initialize store with master password
+- `wallet_store_unlock` - Unlock all wallets with master password
+- `wallet_store_lock` - Lock store (secure wipe)
+- `wallet_store_status` - Get store status
+- `wallet_store_change_password` - Change master password
+- `wallet_store_migrate` - Migrate legacy wallets
+
 ### Wallet Operations
-- `wallet_list` - List wallets
+- `wallet_list` - List wallets in store
 - `wallet_info` - Wallet details
-- `wallet_create` - Create new wallet
-- `wallet_import` - Import private key
-- `wallet_unlock` - Unlock for signing
-- `wallet_lock` - Lock wallet
-- `wallet_export` - Export encrypted backup
-- `wallet_delete` - Delete wallet
-- `wallet_change_password` - Change password
-- `wallet_security` - Configure auto-lock
+- `wallet_create` - Create new wallet (requires unlocked store)
+- `wallet_import` - Import private key (requires unlocked store)
+- `wallet_delete` - Delete wallet (requires unlocked store)
+- `wallet_security` - Configure auto-lock timeout
 
 ### Cache Operations
 - `cache_search` - Fast FTS5 search
@@ -491,8 +499,9 @@ await client.callTool({ name: 'oasf_list_tags', arguments: {} });
 4. **By owner** → `agent_search` with `owner`
 
 ### Write Operation Flow
-1. Check `wallet_list` for available wallets
-2. If needed, `wallet_create` (remind user to save password!)
-3. `wallet_unlock` with password
-4. Execute write operation
-5. Report transaction hash on success
+1. Check `wallet_store_status` - is store initialized and unlocked?
+2. If not initialized: `wallet_store_init` (save master password!)
+3. If locked: `wallet_store_unlock` with master password
+4. If no wallet: `wallet_create` for needed chain
+5. Execute write operation
+6. Report transaction hash on success

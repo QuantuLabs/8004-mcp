@@ -50,10 +50,10 @@ import {
   crawlerAliases,
 } from './unified/crawler.js';
 import {
-  walletTools as unifiedWalletTools,
-  walletHandlers as unifiedWalletHandlers,
-  walletAliases as unifiedWalletAliases,
-} from './unified/wallet.js';
+  walletStoreTools as unifiedWalletTools,
+  walletStoreHandlers as unifiedWalletHandlers,
+  walletStoreAliases as unifiedWalletAliases,
+} from './unified/wallet-v2.js';
 import {
   registrationTools,
   registrationHandlers,
