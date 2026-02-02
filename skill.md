@@ -187,8 +187,9 @@ await client.callTool({ name: 'agent_register', arguments: {
 
 Get accurate cost estimates before registering. No wallet required.
 
+### Solana
+
 ```typescript
-// Solana cost estimate
 const estimate = await client.callTool({ name: 'agent_register', arguments: {
   chain: 'sol',
   estimateCost: true
@@ -204,30 +205,61 @@ const estimate = await client.callTool({ name: 'agent_register', arguments: {
 //     transactionFees: { lamports: 10000, sol: 0.00001 }
 //   },
 //   total: { lamports: 7852590, sol: 0.007853 },
-//   recommended: { lamports: 9423108, sol: 0.009423, description: '20% buffer' },
-//   note: 'Includes AtomStats (ATOM enabled by default)'
+//   recommended: { lamports: 9423108, sol: 0.009423 },
+//   message: 'Estimated cost: 0.007853 SOL (~$1.18 USD)'
 // }
+```
 
-// EVM cost estimate
+### EVM (Two Registration Flows)
+
+EVM has two registration flows with different costs:
+
+| Flow | Transactions | Use Case |
+|------|--------------|----------|
+| **HTTP** | 1 tx | You already have the agent URI hosted |
+| **IPFS** | 2 tx | SDK uploads to IPFS, then sets URI |
+
+```typescript
 const evmEstimate = await client.callTool({ name: 'agent_register', arguments: {
-  chain: 'base',
+  chain: 'eth',
   estimateCost: true
 }});
 // Returns:
 // {
 //   estimated: true,
-//   chain: 'base',
-//   chainId: 84532,
-//   breakdown: {
-//     gasPrice: { wei: '1000000000', gwei: 1 },
-//     estimatedGas: { units: '150000', description: '5 cold SSTORE + overhead' },
-//     storageWrites: { count: 5, description: '_lastId, agentWallet, _balances, _owners, _tokenURIs' },
-//     gasCost: { wei: '150000000000000', eth: 0.00015 }
+//   chain: 'eth',
+//   chainId: 11155111,
+//   gasPrice: { wei: '1000000000', gwei: 1 },
+//   flows: {
+//     http: {
+//       description: 'Single transaction with HTTP/IPFS URI',
+//       gas: '150000',
+//       cost: { wei: '150000000000000', eth: 0.00015, usd: 0.45 },
+//       recommended: { wei: '195000000000000', eth: 0.000195 }
+//     },
+//     ipfs: {
+//       description: 'Two transactions: register() + setAgentURI()',
+//       gas: '200000',
+//       cost: { wei: '200000000000000', eth: 0.0002, usd: 0.60 },
+//       recommended: { wei: '260000000000000', eth: 0.00026 }
+//     }
 //   },
-//   total: { wei: '150000000000000', eth: 0.00015 },
-//   recommended: { wei: '195000000000000', eth: 0.000195, description: '30% buffer' }
+//   breakdown: {
+//     register: { gas: '150000', description: '5 cold SSTORE + ERC-721 mint' },
+//     setAgentURI: { gas: '50000', description: 'Warm SSTORE (IPFS flow only)' }
+//   },
+//   note: 'Gas can spike 10-50x on mainnet during congestion'
 // }
 ```
+
+### Cost Reference (ETH @ $3000)
+
+| Chain | Gas Price | HTTP Flow | IPFS Flow |
+|-------|-----------|-----------|-----------|
+| Base L2 | 0.01 gwei | ~$0.005 | ~$0.006 |
+| Base L2 (busy) | 1 gwei | ~$0.45 | ~$0.60 |
+| ETH Mainnet | 25 gwei | ~$11 | ~$15 |
+| ETH Mainnet (busy) | 50 gwei | ~$22 | ~$30 |
 
 Use `recommended` value to ensure transaction succeeds even with gas price fluctuations.
 

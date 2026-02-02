@@ -375,61 +375,98 @@ async function estimateEvmCost(chainPrefix: string): Promise<unknown> {
   const gasPrice = await publicClient.getGasPrice();
 
   // ERC-8004 IdentityRegistryUpgradeable.register() gas breakdown:
+  // Transaction 1 - register(uri, metadata[]):
   // - _lastId++ (SSTORE cold): 20,000 gas
   // - agentWallet metadata (SSTORE cold): 20,000 gas
   // - _balances[to] (SSTORE cold): 20,000 gas
   // - _owners[tokenId] (SSTORE cold): 20,000 gas
   // - _tokenURIs[tokenId] (SSTORE cold): 20,000 gas
-  // - Function overhead, events, checks: ~35,000 gas
-  // Total: ~135,000 gas (base registration)
-  // With IPFS upload via SDK: may add ~15,000 gas for longer tokenURI
-  const estimatedGas = BigInt(150000);
+  // - Function overhead, events, checks: ~50,000 gas
+  // Subtotal: ~150,000 gas
+  const gasRegister = BigInt(150000);
 
-  // Calculate cost
-  const gasCostWei = gasPrice * estimatedGas;
-  const gasCostEth = formatEther(gasCostWei);
+  // Transaction 2 - setAgentURI (IPFS flow only):
+  // - _tokenURIs[tokenId] (SSTORE warm): 5,000 gas
+  // - Function overhead: ~16,000 gas
+  // Subtotal: ~50,000 gas
+  const gasSetUri = BigInt(50000);
 
-  // Recommended (add 30% buffer for gas price fluctuation)
-  const recommendedWei = (gasCostWei * BigInt(130)) / BigInt(100);
-  const recommendedEth = formatEther(recommendedWei);
+  // Total for each flow
+  const gasHttpFlow = gasRegister;        // Single transaction
+  const gasIpfsFlow = gasRegister + gasSetUri; // Two transactions
+
+  // Calculate costs
+  const costHttpWei = gasPrice * gasHttpFlow;
+  const costIpfsWei = gasPrice * gasIpfsFlow;
+
+  const costHttpEth = formatEther(costHttpWei);
+  const costIpfsEth = formatEther(costIpfsWei);
 
   // Get native token name
   const nativeToken = getNativeToken(chainPrefix);
+  const tokenKey = nativeToken.toLowerCase();
+
+  // USD estimation (using reasonable ETH price)
+  const ethPriceUsd = 3000;
+  const costHttpUsd = parseFloat(costHttpEth) * ethPriceUsd;
+  const costIpfsUsd = parseFloat(costIpfsEth) * ethPriceUsd;
+
+  // Recommended (add 30% buffer for gas price fluctuation)
+  const recommendedHttpWei = (costHttpWei * BigInt(130)) / BigInt(100);
+  const recommendedIpfsWei = (costIpfsWei * BigInt(130)) / BigInt(100);
+
+  const gasPriceGwei = Number(gasPrice) / 1e9;
 
   return successResponse({
     estimated: true,
     chain: chainPrefix,
     chainId,
+    gasPrice: {
+      wei: gasPrice.toString(),
+      gwei: gasPriceGwei,
+    },
+    flows: {
+      http: {
+        description: 'Single transaction with HTTP/IPFS URI',
+        gas: gasHttpFlow.toString(),
+        cost: {
+          wei: costHttpWei.toString(),
+          [tokenKey]: parseFloat(costHttpEth),
+          usd: costHttpUsd,
+        },
+        recommended: {
+          wei: recommendedHttpWei.toString(),
+          [tokenKey]: parseFloat(formatEther(recommendedHttpWei)),
+        },
+      },
+      ipfs: {
+        description: 'Two transactions: register() + setAgentURI() after IPFS upload',
+        gas: gasIpfsFlow.toString(),
+        cost: {
+          wei: costIpfsWei.toString(),
+          [tokenKey]: parseFloat(costIpfsEth),
+          usd: costIpfsUsd,
+        },
+        recommended: {
+          wei: recommendedIpfsWei.toString(),
+          [tokenKey]: parseFloat(formatEther(recommendedIpfsWei)),
+        },
+      },
+    },
     breakdown: {
-      gasPrice: {
-        wei: gasPrice.toString(),
-        gwei: Number(gasPrice / BigInt(1e9)),
-        description: 'Current gas price',
+      register: {
+        gas: gasRegister.toString(),
+        description: '5 cold SSTORE (100k) + ERC-721 mint + events (50k)',
       },
-      estimatedGas: {
-        units: estimatedGas.toString(),
-        description: 'Estimated gas: 5 cold SSTORE (~100k) + overhead (~50k)',
-      },
-      storageWrites: {
-        count: 5,
-        description: '_lastId, agentWallet, _balances, _owners, _tokenURIs',
-      },
-      gasCost: {
-        wei: gasCostWei.toString(),
-        [nativeToken.toLowerCase()]: parseFloat(gasCostEth),
-        description: 'Gas cost at current price',
+      setAgentURI: {
+        gas: gasSetUri.toString(),
+        description: 'Warm SSTORE + overhead (IPFS flow only)',
       },
     },
-    total: {
-      wei: gasCostWei.toString(),
-      [nativeToken.toLowerCase()]: parseFloat(gasCostEth),
-    },
-    recommended: {
-      wei: recommendedWei.toString(),
-      [nativeToken.toLowerCase()]: parseFloat(recommendedEth),
-      description: 'Total with 30% buffer for gas price fluctuation',
-    },
-    message: `Estimated cost: ${parseFloat(gasCostEth).toFixed(6)} ${nativeToken}. Recommended balance: ${parseFloat(recommendedEth).toFixed(6)} ${nativeToken}`,
+    note: chainPrefix === 'eth'
+      ? 'Ethereum mainnet gas can spike to 50-100 gwei during congestion, increasing costs 10-50x.'
+      : 'L2 chains (Base, Arbitrum, etc.) typically have much lower gas costs than mainnet.',
+    message: `HTTP flow: ${parseFloat(costHttpEth).toFixed(6)} ${nativeToken} (~$${costHttpUsd.toFixed(2)}). IPFS flow: ${parseFloat(costIpfsEth).toFixed(6)} ${nativeToken} (~$${costIpfsUsd.toFixed(2)}) at ${gasPriceGwei.toFixed(2)} gwei.`,
   });
 }
 
