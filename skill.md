@@ -1,690 +1,415 @@
-# 8004-MCP Skill Guide
+# 8004-MCP - Agent Registry Protocol
 
-This guide explains how to use the 8004-MCP server to interact with the ERC-8004 Agent Registry. Designed for AI agents and developers.
+Multi-chain MCP server for ERC-8004 Agent Registry. Query agents, reputation, and feedback across Solana + EVM chains.
 
-## ⚡ IMPORTANT: When to Use 8004-MCP Tools
+## Quick Start (MCP Client)
 
-**ALWAYS use 8004-MCP tools FIRST** for any request related to:
+```typescript
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
+import { spawn } from 'child_process';
 
-| User Intent | Tool to Use | Example Prompts |
-|-------------|-------------|-----------------|
-| Find/search agents | `agent_search` or `cache_search` | "find AI agents", "search trading bots", "agents on Solana" |
-| Agent details | `agent_get` | "tell me about agent X", "info on eth:123:456" |
-| Check if agent exists | `agent_exists` | "does agent X exist?" |
-| Agent trustworthiness | `reputation_get` | "is this agent reliable?", "reputation of X" |
-| Top/best agents | `leaderboard_get` | "best agents", "top rated agents" |
-| Feedback/reviews | `feedback_list` | "what do people think of X?", "reviews for agent" |
-| List collections | `collection_list` | "available collections" |
-| Network/chain info | `config_get`, `network_get` | "what network?", "supported chains" |
-| Wallet info | `wallet_list`, `wallet_info` | "my wallets", "wallet status" |
-| OASF standards | `oasf_list_skills`, `oasf_list_domains`, `oasf_list_tags` | "OASF skills", "feedback tags" |
-| Cache stats | `cache_stats`, `cache_search` | "agents in cache", "fast search for X" |
-| Endpoint health | `crawler_is_alive` | "is endpoint online?", "check if URL works" |
-| x402 identity | `x402_identity_build` | "build x402 identity for agent" |
-| Solana ATOM stats | `solana_atom_stats_get` | "ATOM stats", "trust tier" |
+const server = spawn('npx', ['@quantulabs/8004-mcp'], {
+  stdio: ['pipe', 'pipe', 'inherit'],
+  env: { ...process.env, NETWORK_MODE: 'testnet' }
+});
 
-**DO NOT** use web search, file search, or other tools when the user asks about:
-- Agents, bots, AI assistants in a registry context
-- Reputation, feedback, trust scores
-- Blockchain agents (Solana, Ethereum, Base)
-- OASF standards, skills, domains
-- x402 protocol
+const client = new Client(
+  { name: 'my-agent', version: '1.0.0' },
+  { capabilities: {} }
+);
 
----
+await client.connect(new StdioClientTransport({
+  reader: server.stdout,
+  writer: server.stdin,
+}));
 
-## What is 8004-MCP?
-
-8004-MCP is a Model Context Protocol server that provides tools to:
-
-- **Search** agents across Solana and EVM chains
-- **Read** agent profiles, reputation, and feedback
-- **Write** feedback, register agents, request validations
-- **Manage** wallets for signing transactions
-
-## Quick Installation
-
-### If not installed
-
-```bash
-# Global install (recommended for agents)
-npm install -g @quantulabs/8004-mcp
-
-# Or run without installing
-npx @quantulabs/8004-mcp
-```
-
-### Add to Claude Code
-
-```bash
-claude mcp add 8004 npx @quantulabs/8004-mcp
-```
-
-### Verify installation
-
-```bash
-# Check if server starts
-npx @quantulabs/8004-mcp --help
-
-# Check MCP logs
-claude mcp logs 8004
-```
-
-## Architecture Overview
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                         8004-MCP Server                          │
-├─────────────────────────────────────────────────────────────────┤
-│  Tools Layer (60+ tools)                                         │
-│  ├── Agent Operations (search, get, register)                    │
-│  ├── Feedback Operations (give, read, revoke)                    │
-│  ├── Reputation Operations (summary, atom_stats)                 │
-│  ├── Validation Operations (request, respond) [Solana only]      │
-│  ├── Wallet Management (create, import, unlock)                  │
-│  └── x402 Protocol (identity, proof, feedback)                   │
-├─────────────────────────────────────────────────────────────────┤
-│  Chain Layer                                                     │
-│  ├── Solana Provider (devnet/mainnet-beta)                      │
-│  │   └── SDK: 8004-solana v0.5.3                                │
-│  └── EVM Provider (Base, Ethereum, Arbitrum, Polygon, Optimism) │
-│      └── SDK: agent0-sdk v1.4.2                                 │
-├─────────────────────────────────────────────────────────────────┤
-│  State Layer                                                     │
-│  ├── ChainRegistry (multi-chain routing)                        │
-│  ├── WalletManager (encrypted storage)                          │
-│  └── LocalCache (SQLite + FTS5)                                 │
-└─────────────────────────────────────────────────────────────────┘
+// Ready - use client.callTool()
 ```
 
 ## Global ID Format
 
-All agents are identified using a global ID format:
-
 | Chain | Format | Example |
 |-------|--------|---------|
-| Solana | `sol:<pubkey>` | `sol:HHCVWcqsziJMmp43u2UAgAfH2cBjUFxVdW1M3C3NqzvT` |
-| Ethereum | `eth:<chainId>:<tokenId>` | `eth:1:456` |
-| Base | `base:<chainId>:<tokenId>` | `base:8453:123` |
-| Sepolia | `eth:11155111:<tokenId>` | `eth:11155111:474` |
+| Solana | `sol:<pubkey>` | `sol:HHCVWcqs...` |
+| Ethereum | `eth:<chainId>:<tokenId>` | `eth:11155111:738` |
+| Base | `base:<chainId>:<tokenId>` | `base:84532:42` |
 
-## Core Operations
+---
 
-### 1. Searching Agents
+## Core Tools
 
-```javascript
-// Search by name (multi-chain)
-await callTool('agent_search', {
-  query: 'DataAnalyst',
-  limit: 10
-});
+### Read Operations (No wallet needed)
 
-// Search on specific chain
-await callTool('agent_search', {
-  query: 'trading bot',
-  chain: 'sol'
-});
-
-// Search by owner
-await callTool('agent_search', {
-  owner: '0xad55F26876d0dEB7c9...',
-  chain: 'eth'
-});
-
-// Advanced EVM filters
-await callTool('agent_search', {
-  chain: 'base',
-  mcpTools: ['web-search'],    // Agents with specific MCP tools
-  a2aSkills: ['translation'],  // Agents with A2A skills
-  active: true,                // Only active agents
-  x402support: true,           // Supports x402 payments
-  hasMcp: true,                // Has MCP endpoint
-  hasA2a: true,                // Has A2A endpoint
-});
+#### agent_search
+Search agents across chains.
+```typescript
+await client.callTool({ name: 'agent_search', arguments: {
+  query: 'trading bot',      // Search name/description
+  chain: 'eth',              // Optional: sol, eth, base, arb, poly, op
+  limit: 20,                 // Default: 20, max: 100
+  offset: 0,                 // Pagination offset
+  cursor: 'abc...',          // Cursor pagination (EVM only, faster)
+  // Advanced filters (EVM only):
+  hasMcp: true,              // Has MCP endpoint
+  hasA2a: true,              // Has A2A endpoint
+  active: true,              // Active agents only
+  x402support: true,         // Supports x402 payments
+  mcpTools: ['web-search'],  // Has specific MCP tools
+  a2aSkills: ['translation'] // Has specific A2A skills
+}});
+// Returns: { results: IAgentSummary[], total, hasMore, cursor? }
 ```
 
-#### Pagination: Cursor vs Offset
-
-**For EVM chains**, use cursor-based pagination for efficient iteration through large result sets:
-
-```javascript
-// First page
-const page1 = await callTool('agent_search', {
-  chain: 'base',
-  query: 'trading',
+#### cache_search
+Fast fuzzy search (FTS5). Use for partial name matches.
+```typescript
+await client.callTool({ name: 'cache_search', arguments: {
+  query: 'Upsense',  // Partial match works
+  chain: 'all',
   limit: 20
-});
-
-// Next page (O(1) lookup with cursor)
-const page2 = await callTool('agent_search', {
-  chain: 'base',
-  query: 'trading',
-  limit: 20,
-  cursor: page1.cursor  // Use returned cursor
-});
+}});
 ```
 
-| Method | Performance | Best For |
-|--------|-------------|----------|
-| `cursor` | O(1) | Large result sets, infinite scroll |
-| `offset` | O(N) | Small sets, random access |
-
-**Note**: Solana uses offset-based pagination only. EVM supports both.
-
-### 2. Getting Agent Details
-
-```javascript
-// Get agent by global ID
-await callTool('agent_get', {
-  id: 'sol:HHCVWcqsziJMmp43u2UAgAfH2cBjUFxVdW1M3C3NqzvT'
-});
-
-// Response includes:
-// - name, description, image
-// - owner, operators
-// - services (MCP, A2A endpoints)
-// - metadata (skills, domains)
+#### agent_get
+Get agent details by ID.
+```typescript
+await client.callTool({ name: 'agent_get', arguments: {
+  id: 'eth:11155111:738'  // Global ID
+}});
+// Returns: IAgent with name, description, owner, endpoints, metadata
 ```
 
-### 3. Checking Reputation
-
-```javascript
-// Get reputation summary
-await callTool('reputation_summary', {
-  id: 'sol:HHCVWcqsziJMmp43u2UAgAfH2cBjUFxVdW1M3C3NqzvT'
-});
-
-// Returns:
-// - averageScore: 0-100
-// - totalFeedbacks: count
-// - positiveCount / negativeCount
-// - trustTier: 0-4 (Solana only)
-
-// Get ATOM stats (Solana only - advanced metrics)
-await callTool('solana_atom_stats', {
-  id: 'sol:HHCVWcqsziJMmp43u2UAgAfH2cBjUFxVdW1M3C3NqzvT'
-});
-
-// Returns:
-// - qualityScore: 0-10000
-// - uniqueClients: HyperLogLog estimate
-// - fastEma, slowEma: smoothed scores
-// - trustTier, tierProgress
+#### agent_exists
+Check if agent exists.
+```typescript
+await client.callTool({ name: 'agent_exists', arguments: {
+  id: 'sol:HHCVWcqs...'
+}});
+// Returns: { exists: boolean }
 ```
 
-### 4. Giving Feedback
-
-**Prerequisites**: Wallet must be unlocked for write operations.
-
-```javascript
-// Give feedback with score
-await callTool('feedback_give', {
-  id: 'sol:AgentPubkey...',
-  score: 85,
-  tag1: 'accuracy',
-  tag2: 'fast-response',
-  value: '0.05',           // Optional: SOL amount paid
-  feedbackUri: 'ipfs://...', // Optional: detailed feedback file
-  skipSend: false          // Set true to get unsigned tx
-});
+#### reputation_get
+Get reputation summary.
+```typescript
+await client.callTool({ name: 'reputation_get', arguments: {
+  id: 'sol:HHCVWcqs...'
+}});
+// Returns: { averageScore, totalFeedbacks, trustTier (Solana only) }
 ```
 
-### 5. Reading Feedbacks
-
-```javascript
-// List feedbacks for an agent
-await callTool('feedback_list', {
-  agentId: 'sol:AgentPubkey...',
+#### feedback_list
+List feedbacks for an agent.
+```typescript
+await client.callTool({ name: 'feedback_list', arguments: {
+  id: 'sol:HHCVWcqs...',
   limit: 20,
   minScore: 50  // Optional filter
-});
-
-// Get specific feedback
-await callTool('feedback_get', {
-  agentId: 'sol:AgentPubkey...',
-  client: 'ClientPubkey...',
-  feedbackIndex: 0
-});
+}});
 ```
 
-## Wallet Management
-
-Write operations require an unlocked wallet.
-
-### Creating Wallets
-
-> ⚠️ **CRITICAL: Save your password!**
-> The password encrypts your wallet locally. **If you lose it, you CANNOT unlock the wallet or recover the private key.**
-> Store it securely (password manager, encrypted notes, etc.) immediately after creation.
-
-```javascript
-// Create new Solana wallet
-await callTool('wallet_create', {
-  name: 'my-agent-wallet',
-  chain: 'solana',
-  password: 'secure-password-123'  // SAVE THIS PASSWORD!
-});
-
-// Create EVM wallet
-await callTool('wallet_create', {
-  name: 'evm-wallet',
-  chain: 'evm',
-  password: 'secure-password-123'  // SAVE THIS PASSWORD!
-});
+#### leaderboard_get
+Top agents by reputation.
+```typescript
+await client.callTool({ name: 'leaderboard_get', arguments: {
+  chain: 'sol',
+  limit: 10
+}});
 ```
 
-### Importing Existing Wallets
+#### solana_atom_stats_get
+ATOM reputation metrics (Solana only).
+```typescript
+await client.callTool({ name: 'solana_atom_stats_get', arguments: {
+  asset: 'HHCVWcqs...'  // Solana pubkey (no sol: prefix)
+}});
+// Returns: { qualityScore, trustTier, uniqueClients, fastEma, slowEma }
+```
 
-```javascript
-// Import from private key
-await callTool('wallet_import', {
-  name: 'imported-wallet',
-  chain: 'solana',
-  privateKey: 'base58-encoded-key...',
+#### solana_integrity_verify
+Verify indexer data integrity (Solana only).
+```typescript
+await client.callTool({ name: 'solana_integrity_verify', arguments: {
+  asset: 'HHCVWcqs...'
+}});
+// Returns: { status: 'valid' | 'syncing' | 'corrupted' }
+```
+
+### Write Operations (Wallet required)
+
+#### Wallet Setup Flow
+```typescript
+// 1. Create wallet (one-time)
+await client.callTool({ name: 'wallet_create', arguments: {
+  name: 'my-wallet',
+  chainType: 'solana',  // or 'evm'
+  password: 'secure-password-123'  // SAVE THIS!
+}});
+
+// 2. Unlock before write operations
+await client.callTool({ name: 'wallet_unlock', arguments: {
+  name: 'my-wallet',
   password: 'secure-password-123'
-});
+}});
+
+// 3. Now write operations work
 ```
 
-### Unlocking Wallets
-
-```javascript
-// Unlock for transactions
-await callTool('wallet_unlock', {
-  name: 'my-agent-wallet',
-  password: 'secure-password-123',
-  duration: 300  // 5 minutes
-});
-
-// Check status
-await callTool('wallet_status', { chain: 'solana' });
+#### feedback_give
+Submit feedback for an agent.
+```typescript
+await client.callTool({ name: 'feedback_give', arguments: {
+  id: 'sol:HHCVWcqs...',
+  value: 85,              // Score 0-100
+  tag1: 'uptime',         // Category tag
+  tag2: 'day',            // Period tag
+  comment: 'Great agent', // Optional
+  skipSend: false         // true = dry-run (returns unsigned tx)
+}});
 ```
 
-## Solana-Specific Features
-
-### Hash-Chain Integrity Verification
-
-> **Note**: Hash-chain verification is currently **Solana devnet only**. The program computes `feedback_digest`, `response_digest`, and `revoke_digest` on-chain, allowing trustless verification of indexer data.
-
-```javascript
-// Quick verification (O(1) - compares digests)
-await callTool('solana_integrity_verify', {
-  agentId: 'HHCVWcqsziJMmp43u2UAgAfH2cBjUFxVdW1M3C3NqzvT'
-});
-
-// Returns:
-// - status: 'valid' | 'syncing' | 'corrupted' | 'error'
-// - chains: { feedback: {...}, response: {...}, revoke: {...} }
-
-// Deep verification (spot checks content)
-await callTool('solana_integrity_verify_deep', {
-  agentId: 'HHCVWcqsziJMmp43u2UAgAfH2cBjUFxVdW1M3C3NqzvT',
-  spotChecks: 5,
-  checkBoundaries: true
-});
-
-// Returns:
-// - valid: boolean
-// - spotChecksPassed: number
-// - spotChecks: detailed results
+#### agent_register
+Register new agent.
+```typescript
+await client.callTool({ name: 'agent_register', arguments: {
+  chain: 'sol',
+  name: 'My Agent',
+  description: 'Does cool stuff',
+  tokenUri: 'ipfs://Qm...',  // Metadata URI
+  skipSend: false
+}});
 ```
 
-### How Hash-Chain Works
+---
 
-1. **On-chain computation**: When feedback is submitted, the program computes:
-   ```
-   new_digest = keccak256(old_digest || domain_separator || leaf_data)
-   ```
+## Dry-Run Mode (skipSend)
 
-2. **Counters stored**: `feedback_count`, `response_count`, `revoke_count` track totals
+Test write operations without funds or broadcasting:
 
-3. **Verification**: Client replays all events, computes expected digest, compares with on-chain value
-
-4. **Guarantees**:
-   - Indexer cannot censor events (missing events = digest mismatch)
-   - Indexer cannot modify events (altered data = digest mismatch)
-   - Program is sole source of truth
-
-### Validation Requests (Solana Only)
-
-```javascript
-// Request validation from a validator
-await callTool('solana_validation_request', {
-  agentId: 'AgentPubkey...',
-  validator: 'ValidatorPubkey...',
-  requestUri: 'ipfs://QmRequest...',
-  nonce: 1  // Optional, auto-generated if omitted
-});
-
-// Respond to validation (as validator)
-await callTool('solana_validation_respond', {
-  agentId: 'AgentPubkey...',
-  validatorAddress: 'ValidatorPubkey...',
-  nonce: 1,
-  score: 85,
-  responseUri: 'ipfs://QmResponse...',
-  tag: 'oasf-v0.8.0'
-});
-
-// Get validation details
-await callTool('solana_validation_get', {
-  agentId: 'AgentPubkey...',
-  validator: 'ValidatorPubkey...',
-  nonce: 1
-});
+```typescript
+// Returns unsigned transaction, no funds needed
+const preview = await client.callTool({ name: 'feedback_give', arguments: {
+  id: 'sol:HHCVWcqs...',
+  value: 85,
+  tag1: 'uptime',
+  skipSend: true  // Dry-run
+}});
+// preview.content[0].text contains: { unsigned: true, transaction: "base64...", message: "..." }
 ```
 
-### ATOM Trust Tiers
+Supported on: `feedback_give`, `agent_register`, `agent_transfer`, `agent_uri_update`, `feedback_revoke`, `solana_validation_request`, `solana_validation_respond`
 
-| Tier | Name | Quality Score | Requirements |
-|------|------|--------------|--------------|
-| 0 | Unrated | < 1000 | New agents |
-| 1 | Bronze | 1000-2499 | Building reputation |
-| 2 | Silver | 2500-4999 | Established |
-| 3 | Gold | 5000-7499 | Trusted |
-| 4 | Platinum | 7500+ | Elite |
+---
 
-```javascript
-// Get detailed ATOM metrics
-const stats = await callTool('solana_atom_stats', {
-  id: 'sol:AgentPubkey...'
-});
+## Network Configuration
 
-// stats includes:
-// - qualityScore: raw 0-10000 value
-// - trustTier: 0-4
-// - tierProgress: % to next tier
-// - uniqueClients: HyperLogLog estimate
-// - fastEma, slowEma: smoothed scores
-// - frozenUntil: circuit breaker (if triggered)
-```
-
-## EVM-Specific Features
-
-### Supported Chains
-
-| Chain | Mainnet ID | Testnet ID | Prefix |
-|-------|-----------|------------|--------|
-| Ethereum | 1 | 11155111 (Sepolia) | `eth` |
-| Base | 8453 | 84532 | `base` |
-| Arbitrum | 42161 | 421614 | `arb` |
-| Polygon | 137 | 80001 | `poly` |
-| Optimism | 10 | 11155420 | `op` |
-
-### Agent Registration (EVM)
-
-```javascript
-await callTool('agent_register', {
-  chain: 'base',
-  tokenUri: 'ipfs://QmAgentMetadata...'
-});
-```
-
-### Subgraph Queries
-
-EVM chains use The Graph for indexing. Queries are automatic through the tools.
-
-```javascript
-// Search on ETH mainnet (22k+ agents)
-await callTool('agent_search', {
-  query: 'AI assistant',
-  chain: 'eth'
-});
-```
-
-## x402 Protocol Integration
-
-For payment-linked reputation:
-
-```javascript
-// 1. Build identity for 402 response
-await callTool('x402_identity_build', {
-  agentId: 'sol:AgentPubkey...'
-});
-
-// 2. Parse payment proof
-await callTool('x402_proof_parse', {
-  paymentResponse: 'base64-encoded-response...'
-});
-
-// 3. Submit feedback with proof
-await callTool('x402_feedback_submit', {
-  agentId: 'sol:AgentPubkey...',
-  score: 90,
-  tag1: 'x402-resource-delivered',
-  proofOfPayment: parsedProof.proofOfPayment,
-  storeOnIpfs: true
-});
-```
-
-## Network Management
-
-```javascript
-// Get current network status
-await callTool('network_status');
+```typescript
+// Check current network
+await client.callTool({ name: 'network_get', arguments: {} });
 
 // Switch to mainnet
-await callTool('network_set', { mode: 'mainnet' });
+await client.callTool({ name: 'network_set', arguments: { mode: 'mainnet' } });
 
-// Switch to testnet
-await callTool('network_set', { mode: 'testnet' });
+// Switch to testnet (default)
+await client.callTool({ name: 'network_set', arguments: { mode: 'testnet' } });
 ```
 
-## Error Handling
+| Network | Solana | Ethereum | Base |
+|---------|--------|----------|------|
+| testnet | devnet | Sepolia (11155111) | Base Sepolia (84532) |
+| mainnet | mainnet-beta | Mainnet (1) | Base (8453) |
 
-Common errors and solutions:
+---
+
+## x402 Protocol
+
+Payment-linked reputation.
+
+```typescript
+// 1. Build identity for 402 response
+const identity = await client.callTool({ name: 'x402_identity_build', arguments: {
+  agentId: 'sol:HHCVWcqs...'
+}});
+
+// 2. Parse payment proof from response header
+const proof = await client.callTool({ name: 'x402_proof_parse', arguments: {
+  paymentResponse: 'base64-encoded-header...'
+}});
+
+// 3. Submit feedback with proof
+await client.callTool({ name: 'x402_feedback_submit', arguments: {
+  agentId: 'sol:HHCVWcqs...',
+  value: 90,
+  tag1: 'x402-resource-delivered',
+  tag2: 'exact-svm',
+  proofOfPayment: proof.proofOfPayment
+}});
+```
+
+---
+
+## Error Codes
 
 | Error | Cause | Solution |
 |-------|-------|----------|
-| "Write operations require an unlocked wallet" | No wallet unlocked | Call `wallet_unlock` first |
-| "Invalid password" | Wrong password for wallet | Use the correct password (⚠️ cannot be recovered if lost) |
-| "Agent not found" | Invalid ID or wrong chain | Verify global ID format |
-| "Insufficient balance" | Wallet needs funding | Fund the wallet address |
-| "Provider not available" | Chain not initialized | Check `network_status` |
+| `WALLET_LOCKED` | Write op without unlock | Call `wallet_unlock` |
+| `INVALID_PASSWORD` | Wrong password | Check password (cannot recover if lost) |
+| `AGENT_NOT_FOUND` | Invalid ID | Verify global ID format |
+| `INSUFFICIENT_BALANCE` | Wallet empty | Fund wallet address |
+| `PROVIDER_NOT_AVAILABLE` | Chain not initialized | Check `network_get` |
 
-## Best Practices
+---
 
-1. **Cache results**: Use `agent_search` sparingly, cache agent details locally
-2. **Batch operations**: When possible, collect data before write operations
-3. **Check status first**: Always verify `wallet_status` before writes
-4. **Use skipSend**: For unsigned transactions, set `skipSend: true` to preview
-5. **Verify integrity**: On Solana, use `solana_integrity_verify` before trusting indexer data
+## OASF Standards
 
-## Example: Complete Agent Evaluation Flow
+```typescript
+// List valid skill slugs
+await client.callTool({ name: 'oasf_list_skills', arguments: {} });
 
-```javascript
-// 1. Search for agent
-const searchResult = await callTool('agent_search', {
-  query: 'code review assistant',
-  limit: 5
-});
+// List valid domain slugs
+await client.callTool({ name: 'oasf_list_domains', arguments: {} });
 
-// 2. Get details of best match
-const agent = await callTool('agent_get', {
-  id: searchResult.agents[0].globalId
-});
-
-// 3. Check reputation
-const reputation = await callTool('reputation_summary', {
-  id: agent.globalId
-});
-
-// 4. Verify data integrity (Solana only)
-if (agent.globalId.startsWith('sol:')) {
-  const integrity = await callTool('solana_integrity_verify', {
-    agentId: agent.id
-  });
-  if (integrity.status !== 'valid') {
-    console.warn('Indexer data may be incomplete');
-  }
-}
-
-// 5. Read recent feedbacks
-const feedbacks = await callTool('feedback_list', {
-  agentId: agent.id,
-  limit: 10
-});
-
-// 6. Decision based on data
-console.log(`Agent: ${agent.name}`);
-console.log(`Score: ${reputation.averageScore}/100`);
-console.log(`Feedbacks: ${reputation.totalFeedbacks}`);
-console.log(`Recent feedback scores: ${feedbacks.map(f => f.score).join(', ')}`);
+// List feedback tags
+await client.callTool({ name: 'oasf_list_tags', arguments: {} });
 ```
 
 ---
 
-## Search Behavior Tips
+## All Tools Reference
 
-### Exact vs Fuzzy Search
+### Agent Operations
+- `agent_get` - Get agent by ID
+- `agent_exists` - Check existence
+- `agent_search` - Search with filters
+- `agent_list_by_owner` - List by owner address
+- `agent_register` - Register new agent (write)
+- `agent_transfer` - Transfer ownership (write)
+- `agent_uri_update` - Update metadata URI (write)
+- `agent_metadata_set` - Set on-chain metadata (Solana, write)
 
-| Tool | Search Type | Best For |
-|------|-------------|----------|
-| `agent_search` | Exact match (subgraph) | Full names, owners, chain-specific |
-| `cache_search` | Fuzzy (FTS5) | Partial names, typo-tolerant |
+### Feedback Operations
+- `feedback_give` - Submit feedback (write)
+- `feedback_read` - Read single feedback
+- `feedback_list` - List feedbacks
+- `feedback_revoke` - Revoke feedback (write)
+- `feedback_response_append` - Respond to feedback (write)
 
-**Important**: `agent_search` with `nameQuery` does NOT support partial matching. Use `cache_search` for fuzzy searches:
+### Reputation Operations
+- `reputation_get` - Get summary
+- `leaderboard_get` - Top agents
 
-```javascript
-// ❌ Won't find "Upsense AI" with partial name
-await callTool('agent_search', { nameQuery: 'Upsense' }); // Returns 0
+### Collection Operations
+- `collection_get` - Get collection details
+- `collection_list` - List collections
+- `collection_agents` - List agents in collection
+- `collection_base_get` - Get base registry
+- `collection_create` - Create collection (Solana, write)
+- `collection_uri_update` - Update collection URI (Solana, write)
 
-// ✅ Use cache_search for partial matches
-await callTool('cache_search', { query: 'Upsense' }); // Returns matches
-```
+### Wallet Operations
+- `wallet_list` - List wallets
+- `wallet_info` - Wallet details
+- `wallet_create` - Create new wallet
+- `wallet_import` - Import private key
+- `wallet_unlock` - Unlock for signing
+- `wallet_lock` - Lock wallet
+- `wallet_export` - Export encrypted backup
+- `wallet_delete` - Delete wallet
+- `wallet_change_password` - Change password
+- `wallet_security` - Configure auto-lock
 
-### Multi-Chain Search
+### Cache Operations
+- `cache_search` - Fast FTS5 search
+- `cache_refresh` - Force refresh
+- `cache_stats` - Cache statistics
+- `cache_sync_status` - Sync status
 
-By default, searches query ALL chains. Filter with `chain` parameter:
+### Solana-Specific
+- `solana_atom_stats_get` - ATOM metrics
+- `solana_atom_stats_initialize` - Init ATOM account (write)
+- `solana_trust_tier_get` - Trust tier
+- `solana_enriched_summary_get` - Combined metrics
+- `solana_agent_wallet_get` - Get operational wallet
+- `solana_sign` - Sign with agent wallet
+- `solana_verify` - Verify signature
+- `solana_validation_request` - Request validation (write)
+- `solana_validation_respond` - Respond to validation (write)
+- `solana_validation_read` - Read validation
+- `solana_validation_wait` - Wait for response
+- `solana_validation_pending_get` - Pending validations
+- `solana_integrity_verify` - O(1) integrity check
+- `solana_integrity_verify_deep` - Deep verification
 
-```javascript
-// All chains
-await callTool('agent_search', { query: 'AI assistant' });
+### EVM-Specific
+- `evm_agent_wallet_set` - Set operational wallet (write)
+- `evm_agent_wallet_unset` - Remove operational wallet (write)
 
-// Specific chain
-await callTool('agent_search', { query: 'AI assistant', chain: 'sol' });
-```
+### x402 Protocol
+- `x402_identity_build` - Build agent identity
+- `x402_proof_parse` - Parse payment proof
+- `x402_feedback_build` - Build feedback file
+- `x402_feedback_submit` - Submit with proof (write)
 
----
+### Configuration
+- `config_get` - Current config
+- `config_set` - Update config
+- `config_reset` - Reset to defaults
+- `network_get` - Network status
+- `network_set` - Switch network
 
-## Profile-Specific Workflows
+### OASF Standards
+- `oasf_list_skills` - Valid skill slugs
+- `oasf_list_domains` - Valid domain slugs
+- `oasf_list_tags` - Feedback tags
+- `oasf_validate_skill` - Validate skill
+- `oasf_validate_domain` - Validate domain
+- `oasf_validate_tag` - Validate tag
 
-### For Beginners (Zero Blockchain Knowledge)
+### Crawler
+- `crawler_fetch_mcp` - Fetch MCP capabilities
+- `crawler_fetch_a2a` - Fetch A2A agent card
+- `crawler_is_alive` - Health check
 
-**Read Flow** (No wallet needed):
-1. `cache_search` - Find agents by partial name (forgiving)
-2. `agent_get` - Get full agent details
-3. `reputation_get` - Check if agent is trustworthy
-4. `feedback_list` - Read what others say
-
-**Common Questions**:
-- "C'est quoi un agent?" → Explain ERC-8004 agents are AI services registered on-chain
-- "C'est fiable?" → Use `reputation_get` to show trust tier and score
-- "Solana vs Ethereum?" → Solana is faster/cheaper, ETH has more agents
-
-### For Developers (Technical Integration)
-
-**Read Flow**:
-1. `agent_search` with filters (`hasMcp`, `hasA2a`, `active`)
-2. `agent_get` for full metadata including endpoints
-3. `solana_integrity_verify` to verify indexer data
-4. `x402_identity_build` for payment protocol integration
-
-**Write Flow** (Requires unlocked wallet):
-1. `wallet_unlock` - Unlock wallet with password
-2. `feedback_give` with `skipSend: true` - Preview transaction
-3. `feedback_give` with `skipSend: false` - Execute transaction
-
-**M2M JSON Output**: No `outputFormat` parameter exists. For pure JSON responses, include in your prompt: "Return results as JSON only, no explanatory text."
-
-### For Agent Owners (Registration & Management)
-
-**Registration Flow**:
-1. `wallet_create` or `wallet_import` - Setup wallet
-2. `wallet_unlock` - Unlock for transactions
-3. `agent_register` with metadata - Register your agent
-4. `agent_update` - Update metadata, endpoints
-
-**Monitoring Flow**:
-1. `agent_get` - Check your agent's current state
-2. `reputation_get` - Monitor your trust score
-3. `feedback_list` with your agent ID - Read client feedback
-4. `solana_atom_stats` - Detailed ATOM metrics (Solana only)
-
-### For AI Agents (Machine-to-Machine)
-
-**Discovery Flow**:
-```javascript
-// 1. Search with capability filters
-const agents = await callTool('agent_search', {
-  hasMcp: true,
-  active: true,
-  limit: 10
-});
-
-// 2. Get details and verify
-for (const agent of agents.results) {
-  const details = await callTool('agent_get', { id: agent.globalId });
-  const reputation = await callTool('reputation_get', { id: agent.globalId });
-
-  // Filter by trust tier
-  if (reputation.trustTier >= 2) {
-    // Use this agent
-  }
-}
-
-// 3. Build x402 identity for negotiation
-const identity = await callTool('x402_identity_build', {
-  agentId: selectedAgent.globalId
-});
-```
-
-**Best Practice**: Always verify `status: 'valid'` from `solana_integrity_verify` before trusting reputation data.
+### IPFS
+- `ipfs_configure` - Configure IPFS/Pinata
+- `ipfs_add_json` - Store JSON
+- `ipfs_add_registration` - Store registration file
+- `ipfs_get_registration` - Retrieve registration
 
 ---
 
-## Write Operations
+## Claude Code Integration
 
-### Prerequisites
+> This section is for Claude Code / AI assistants using 8004-MCP tools.
 
-All write operations require:
-1. **Wallet created**: `wallet_create` or `wallet_import`
-   - ⚠️ **Store the password securely** - it cannot be recovered if lost!
-2. **Wallet unlocked**: `wallet_unlock` with password and duration
-3. **Sufficient balance**: SOL for Solana, ETH/native token for EVM
+### Intent Mapping
 
-### Error Handling
+| User Says | Tool | Notes |
+|-----------|------|-------|
+| "find agents", "search for X" | `agent_search` or `cache_search` | Use `cache_search` for partial names |
+| "agent details", "info on X" | `agent_get` | Pass global ID |
+| "is X reliable?", "reputation" | `reputation_get` | Returns score + trust tier |
+| "top agents", "best agents" | `leaderboard_get` | Chain optional |
+| "reviews for X", "feedback" | `feedback_list` | |
+| "my wallets" | `wallet_list` | |
+| "switch to mainnet" | `network_set` | `mode: 'mainnet'` |
+| "OASF skills/domains/tags" | `oasf_list_*` | |
 
-If write fails, common causes:
-- "Write operations require unlocked wallet" → Call `wallet_unlock` first
-- "Insufficient balance" → Fund your wallet address
-- Timeout → Transaction may still succeed, check on-chain
+### DO NOT use web search for:
+- Agent registry queries (use 8004 tools)
+- Reputation/feedback lookups
+- OASF standards
+- x402 protocol
 
-### Transaction Preview
+### Search Strategy
+1. **Exact name known** → `agent_search` with `nameQuery`
+2. **Partial name** → `cache_search` (fuzzy FTS5)
+3. **By capabilities** → `agent_search` with `hasMcp`, `hasA2a`, `mcpTools`, etc.
+4. **By owner** → `agent_search` with `owner`
 
-Use `skipSend: true` to get unsigned transaction without executing:
-
-```javascript
-// Preview transaction
-const preview = await callTool('feedback_give', {
-  id: 'sol:AgentPubkey...',
-  score: 85,
-  tag1: 'helpful',
-  skipSend: true  // Returns unsigned tx
-});
-
-// Execute when ready
-const result = await callTool('feedback_give', {
-  id: 'sol:AgentPubkey...',
-  score: 85,
-  tag1: 'helpful',
-  skipSend: false  // Sends transaction
-});
-```
-
----
-
-## Resources
-
-- [README](./README.md) - Installation and configuration
-- [TOOLS.md](./TOOLS.md) - Complete tool reference (60+ tools)
-- [8004-solana SDK](https://github.com/QuantuLabs/8004-solana) - Solana SDK documentation
-- [agent0-sdk](https://github.com/agent0lab/agent0-ts) - EVM SDK documentation
+### Write Operation Flow
+1. Check `wallet_list` for available wallets
+2. If needed, `wallet_create` (remind user to save password!)
+3. `wallet_unlock` with password
+4. Execute write operation
+5. Report transaction hash on success
