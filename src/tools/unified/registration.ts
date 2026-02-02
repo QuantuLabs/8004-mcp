@@ -291,21 +291,21 @@ async function estimateSolanaCost(): Promise<unknown> {
     throw new Error('Solana provider not available');
   }
 
-  // Metaplex Core NFT account size (approximate)
-  const METAPLEX_CORE_ASSET_SIZE = 200; // Base asset account
+  // Account sizes from Anchor programs
+  const METAPLEX_CORE_ASSET_SIZE = 268; // Base asset + collection plugin
+  const ATOM_STATS_SIZE = 561;          // From atom-engine state.rs
 
-  // Calculate rent for each account
+  // Calculate rent for each account created during registration
   const agentAccountRent = calculateRentExempt(ACCOUNT_SIZES.agentAccount);
   const metaplexAssetRent = calculateRentExempt(METAPLEX_CORE_ASSET_SIZE);
+  const atomStatsRent = calculateRentExempt(ATOM_STATS_SIZE);
 
-  // Transaction fee (typically 5000 lamports, but can vary)
+  // Transaction fee (CPI-heavy transaction with Metaplex Core)
   const estimatedTxFee = 5000;
+  const priorityFeeBuffer = 5000;
 
-  // Priority fee buffer (for congested network)
-  const priorityFeeBuffer = 10000;
-
-  // Total in lamports
-  const totalLamports = agentAccountRent + metaplexAssetRent + estimatedTxFee + priorityFeeBuffer;
+  // Total in lamports (ATOM is enabled by default)
+  const totalLamports = agentAccountRent + metaplexAssetRent + atomStatsRent + estimatedTxFee + priorityFeeBuffer;
   const totalSol = totalLamports / LAMPORTS_PER_SOL;
 
   // Recommended balance (add 20% buffer)
@@ -327,15 +327,15 @@ async function estimateSolanaCost(): Promise<unknown> {
         sol: metaplexAssetRent / LAMPORTS_PER_SOL,
         description: `Rent for Metaplex Core NFT (~${METAPLEX_CORE_ASSET_SIZE} bytes)`,
       },
-      transactionFee: {
-        lamports: estimatedTxFee,
-        sol: estimatedTxFee / LAMPORTS_PER_SOL,
-        description: 'Base transaction fee',
+      atomStatsRent: {
+        lamports: atomStatsRent,
+        sol: atomStatsRent / LAMPORTS_PER_SOL,
+        description: `Rent for AtomStats reputation account (${ATOM_STATS_SIZE} bytes)`,
       },
-      priorityFeeBuffer: {
-        lamports: priorityFeeBuffer,
-        sol: priorityFeeBuffer / LAMPORTS_PER_SOL,
-        description: 'Priority fee buffer for congested network',
+      transactionFees: {
+        lamports: estimatedTxFee + priorityFeeBuffer,
+        sol: (estimatedTxFee + priorityFeeBuffer) / LAMPORTS_PER_SOL,
+        description: 'Transaction fee + priority buffer',
       },
     },
     total: {
@@ -347,7 +347,8 @@ async function estimateSolanaCost(): Promise<unknown> {
       sol: recommendedSol,
       description: 'Total with 20% safety buffer',
     },
-    message: `Estimated cost: ${totalSol.toFixed(6)} SOL. Recommended balance: ${recommendedSol.toFixed(6)} SOL`,
+    note: 'Includes AtomStats account (ATOM enabled by default). Use register_with_options(atom_enabled=false) to skip.',
+    message: `Estimated cost: ${totalSol.toFixed(6)} SOL (~$${(totalSol * 150).toFixed(2)} USD). Recommended: ${recommendedSol.toFixed(6)} SOL`,
   });
 }
 

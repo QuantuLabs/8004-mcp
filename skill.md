@@ -198,13 +198,14 @@ const estimate = await client.callTool({ name: 'agent_register', arguments: {
 //   estimated: true,
 //   chain: 'solana',
 //   breakdown: {
-//     agentAccountRent: { lamports: 2068605, sol: 0.002068 },
-//     metaplexAssetRent: { lamports: 1392000, sol: 0.001392 },
-//     transactionFee: { lamports: 5000, sol: 0.000005 },
-//     priorityFeeBuffer: { lamports: 10000, sol: 0.00001 }
+//     agentAccountRent: { lamports: 2068605, sol: 0.002069, description: '297 bytes' },
+//     metaplexAssetRent: { lamports: 1866620, sol: 0.001867, description: '~268 bytes' },
+//     atomStatsRent: { lamports: 3907365, sol: 0.003907, description: '561 bytes' },
+//     transactionFees: { lamports: 10000, sol: 0.00001 }
 //   },
-//   total: { lamports: 3475605, sol: 0.003475 },
-//   recommended: { lamports: 4170726, sol: 0.004170, description: '20% buffer' }
+//   total: { lamports: 7852590, sol: 0.007853 },
+//   recommended: { lamports: 9423108, sol: 0.009423, description: '20% buffer' },
+//   note: 'Includes AtomStats (ATOM enabled by default)'
 // }
 
 // EVM cost estimate
