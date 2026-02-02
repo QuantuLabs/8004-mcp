@@ -37,6 +37,17 @@ import { TrustTier, getTrustTierName } from '../../core/interfaces/reputation.js
 import { matchesSearchFilter } from '../../core/utils/search-filter.js';
 import { getWalletManager } from '../../core/wallet/index.js';
 
+/**
+ * Extract just the tokenId from an agentId that may include chainId prefix
+ * SDK may return "738" or "11155111:738" format
+ */
+function extractTokenId(agentId: string): string {
+  if (agentId.includes(':')) {
+    return agentId.split(':').pop()!;
+  }
+  return agentId;
+}
+
 export interface IEVMConfig {
   chainId: number;
   chainPrefix: ChainPrefix;
@@ -225,8 +236,8 @@ export class EVMChainProvider implements IChainProvider {
 
         return {
           results: paginatedAgents.map((a: AgentSummary) => ({
-            id: a.agentId,
-            globalId: toGlobalId(this.chainPrefix, a.agentId, String(this.config.chainId)),
+            id: extractTokenId(a.agentId),
+            globalId: toGlobalId(this.chainPrefix, extractTokenId(a.agentId), String(this.config.chainId)),
             chainType: 'evm' as const,
             chainPrefix: this.chainPrefix,
             name: a.name ?? `Agent #${a.agentId}`,
@@ -269,8 +280,8 @@ export class EVMChainProvider implements IChainProvider {
 
         return {
           results: results.items.map((a: AgentSummary) => ({
-            id: a.agentId,
-            globalId: toGlobalId(this.chainPrefix, a.agentId, String(this.config.chainId)),
+            id: extractTokenId(a.agentId),
+            globalId: toGlobalId(this.chainPrefix, extractTokenId(a.agentId), String(this.config.chainId)),
             chainType: 'evm' as const,
             chainPrefix: this.chainPrefix,
             name: a.name ?? `Agent #${a.agentId}`,
@@ -330,8 +341,8 @@ export class EVMChainProvider implements IChainProvider {
 
       return {
         results: paginatedItems.map((a: AgentSummary) => ({
-          id: a.agentId,
-          globalId: toGlobalId(this.chainPrefix, a.agentId, String(this.config.chainId)),
+          id: extractTokenId(a.agentId),
+          globalId: toGlobalId(this.chainPrefix, extractTokenId(a.agentId), String(this.config.chainId)),
           chainType: 'evm' as const,
           chainPrefix: this.chainPrefix,
           name: a.name ?? `Agent #${a.agentId}`,

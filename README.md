@@ -187,22 +187,121 @@ Switched to mainnet. Active chains:
 - Ethereum: mainnet (chainId: 1)
 ```
 
+## Usage for Autonomous Agents
+
+For programmatic access from autonomous agents, AI frameworks, or custom applications:
+
+### Quick Start
+
+```javascript
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
+import { spawn } from 'child_process';
+
+// Start the MCP server
+const server = spawn('npx', ['@quantulabs/8004-mcp'], {
+  stdio: ['pipe', 'pipe', 'inherit'],
+  env: { ...process.env, NETWORK_MODE: 'testnet' },
+});
+
+const transport = new StdioClientTransport({
+  reader: server.stdout,
+  writer: server.stdin,
+});
+
+const client = new Client(
+  { name: 'my-agent', version: '1.0.0' },
+  { capabilities: {} }
+);
+
+await client.connect(transport);
+
+// List available tools
+const tools = await client.listTools();
+console.log(`${tools.tools.length} tools available`);
+
+// Search agents
+const result = await client.callTool({
+  name: 'agent_search',
+  arguments: { chain: 'eth', limit: 5 }
+});
+console.log(result.content[0].text);
+
+// Get agent details
+const agent = await client.callTool({
+  name: 'agent_get',
+  arguments: { id: 'eth:11155111:738' }
+});
+console.log(agent.content[0].text);
+```
+
+### Testing Without Funds (Dry Run)
+
+Use `skipSend: true` to get unsigned transactions without broadcasting:
+
+```javascript
+// Create a wallet first
+await client.callTool({
+  name: 'wallet_create',
+  arguments: {
+    name: 'test-wallet',
+    chainType: 'solana',
+    password: 'my-secure-password'
+  }
+});
+
+// Register agent (dry run - returns unsigned tx)
+const result = await client.callTool({
+  name: 'agent_register',
+  arguments: {
+    name: 'My Test Agent',
+    description: 'A test agent',
+    chain: 'sol',
+    skipSend: true  // Returns unsigned tx, no funds needed
+  }
+});
+// Returns: { unsigned: true, transaction: "base64...", message: "..." }
+
+// Give feedback (dry run)
+const feedback = await client.callTool({
+  name: 'feedback_give',
+  arguments: {
+    id: 'sol:AgentPubkey...',
+    value: 85,
+    tag1: 'uptime',
+    tag2: 'day',
+    skipSend: true
+  }
+});
+```
+
+### Dependencies
+
+```bash
+npm install @modelcontextprotocol/sdk
+```
+
 ## Documentation
 
-- [TOOLS.md](./TOOLS.md) - Complete tool reference (60+ tools)
+- [TOOLS.md](./TOOLS.md) - Complete tool reference (86+ tools)
 - [skill.md](./skill.md) - AI agent integration guide (search tips, workflows, write ops)
 
 ## Global ID Format
 
-Agents are identified using global IDs:
+Agents are identified using global IDs that include chain info:
 
-- Solana: `sol:<pubkey>`
-- EVM: `<chain>:<chainId>:<tokenId>`
+| Chain | Format | Example |
+|-------|--------|---------|
+| Solana | `sol:<pubkey>` | `sol:7xKXtG8vN2mPQr...` |
+| Ethereum | `eth:<chainId>:<tokenId>` | `eth:11155111:738` (Sepolia) |
+| Base | `base:<chainId>:<tokenId>` | `base:84532:42` (Sepolia) |
+| Arbitrum | `arb:<chainId>:<tokenId>` | `arb:421614:123` |
+| Polygon | `poly:<chainId>:<tokenId>` | `poly:80002:456` |
+| Optimism | `op:<chainId>:<tokenId>` | `op:11155420:789` |
 
-Examples:
-- `sol:7xKXtG8vN2mPQr...`
-- `base:8453:123`
-- `eth:1:456`
+**Note:** When using `agent_get`, you can pass either:
+- Full globalId: `eth:11155111:738`
+- Raw tokenId with chain param: `{ id: "738", chain: "eth" }`
 
 ## x402 Protocol Integration
 

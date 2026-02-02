@@ -121,13 +121,26 @@ export function parseGlobalId(id: string): IGlobalId {
   const chainType: ChainType = prefix === 'sol' ? 'solana' : 'evm';
 
   if (chainType === 'solana') {
+    // Solana: sol:rawId
     return { prefix, chainType, rawId: parts[1] ?? '' };
   } else {
+    // EVM: prefix:chainId:tokenId
+    // Handle malformed IDs like eth:11155111:11155111:738 (duplicated chainId)
+    // In this case, take the last part as tokenId
+    const chainId = parts[1];
+    let rawId = parts[2] ?? '';
+
+    // If there are more than 3 parts, the rawId is the last part
+    // This handles legacy malformed globalIds with duplicated chainId
+    if (parts.length > 3) {
+      rawId = parts[parts.length - 1] ?? '';
+    }
+
     return {
       prefix,
       chainType,
-      chainId: parts[1],
-      rawId: parts[2] ?? ''
+      chainId,
+      rawId
     };
   }
 }
