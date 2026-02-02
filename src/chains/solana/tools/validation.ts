@@ -4,7 +4,26 @@ import { PublicKey } from '@solana/web3.js';
 import type { Tool } from '@modelcontextprotocol/sdk/types.js';
 import { getArgs, readString, readNumber, readBoolean, parseBuffer } from '../../../core/parsers/common.js';
 import { successResponse } from '../../../core/serializers/common.js';
+import { invalidParamsError } from '../../../core/errors/mcp-error.js';
 import type { SolanaStateManager } from '../state.js';
+
+function validateNonce(nonce: number): void {
+  if (!Number.isInteger(nonce) || nonce < 0) {
+    throw invalidParamsError('nonce must be a non-negative integer', { nonce });
+  }
+}
+
+function validateScore(score: number): void {
+  if (!Number.isFinite(score) || score < 0 || score > 100) {
+    throw invalidParamsError('response score must be between 0 and 100', { score });
+  }
+}
+
+function validateTag(tag: string | undefined): void {
+  if (tag && Buffer.byteLength(tag, 'utf8') > 32) {
+    throw invalidParamsError('tag must be max 32 bytes', { tagLength: Buffer.byteLength(tag, 'utf8') });
+  }
+}
 
 export function createValidationTools(getState: () => SolanaStateManager) {
   const tools: Tool[] = [];
@@ -50,6 +69,7 @@ export function createValidationTools(getState: () => SolanaStateManager) {
     const assetStr = readString(input, 'asset', true);
     const validatorStr = readString(input, 'validator', true);
     const nonce = readNumber(input, 'nonce', true);
+    validateNonce(nonce);
     const requestUri = readString(input, 'requestUri', true);
     const requestHashStr = readString(input, 'requestHash', true);
     const requestHash = parseBuffer(requestHashStr, 'requestHash');
@@ -104,11 +124,14 @@ export function createValidationTools(getState: () => SolanaStateManager) {
     const input = getArgs(args);
     const assetStr = readString(input, 'asset', true);
     const nonce = readNumber(input, 'nonce', true);
+    validateNonce(nonce);
     const response = readNumber(input, 'response', true);
+    validateScore(response);
     const responseUri = readString(input, 'responseUri', true);
     const responseHashStr = readString(input, 'responseHash', true);
     const responseHash = parseBuffer(responseHashStr, 'responseHash');
     const tag = readString(input, 'tag');
+    validateTag(tag);
     const skipSend = readBoolean(input, 'skipSend') ?? false;
     const asset = new PublicKey(assetStr);
     const sdk = getState().getSdk();
@@ -144,6 +167,7 @@ export function createValidationTools(getState: () => SolanaStateManager) {
     const assetStr = readString(input, 'asset', true);
     const validatorStr = readString(input, 'validator', true);
     const nonce = readNumber(input, 'nonce', true);
+    validateNonce(nonce);
     const asset = new PublicKey(assetStr);
     const validator = new PublicKey(validatorStr);
     const sdk = getState().getSdk();
@@ -183,7 +207,10 @@ export function createValidationTools(getState: () => SolanaStateManager) {
     const assetStr = readString(input, 'asset', true);
     const validatorStr = readString(input, 'validator', true);
     const nonce = readNumber(input, 'nonce', true);
-    const timeoutMs = readNumber(input, 'timeoutMs') ?? 30000;
+    validateNonce(nonce);
+    const rawTimeout = readNumber(input, 'timeoutMs') ?? 30000;
+    // Clamp timeout to reasonable bounds (1s to 5min)
+    const timeoutMs = Math.max(1000, Math.min(rawTimeout, 300000));
     const asset = new PublicKey(assetStr);
     const validator = new PublicKey(validatorStr);
     const sdk = getState().getSdk();

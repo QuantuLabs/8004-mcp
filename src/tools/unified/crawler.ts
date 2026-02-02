@@ -7,6 +7,11 @@ import { globalState } from '../../state/global-state.js';
 import { EndpointCrawler } from '8004-solana';
 
 // SSRF Protection: Validate URLs to prevent internal network scanning
+// NOTE: This validation checks hostname strings only, not resolved IPs.
+// DNS rebinding attacks using dynamic DNS are mitigated by blocking common
+// rebinding services (nip.io, sslip.io, xip.io) but this is not foolproof.
+// For production use with untrusted input, consider using a DNS resolver
+// that validates resolved IPs before making HTTP requests.
 const PRIVATE_IP_PATTERNS = [
   /^127\./,                           // Loopback 127.0.0.0/8
   /^10\./,                            // Private 10.0.0.0/8
@@ -29,6 +34,21 @@ const BLOCKED_HOSTNAMES = [
   '169.254.169.254',                   // AWS/GCP/Azure metadata
 ];
 
+// DNS rebinding protection patterns
+const SUSPICIOUS_HOSTNAME_PATTERNS = [
+  /\.localhost$/i,                     // *.localhost
+  /\.local$/i,                         // *.local (mDNS)
+  /\.internal$/i,                      // *.internal
+  /\.corp$/i,                          // *.corp
+  /\.lan$/i,                           // *.lan
+  /\.home$/i,                          // *.home
+  /\.localdomain$/i,                   // *.localdomain
+  /\d+\.\d+\.\d+\.\d+\.nip\.io$/i,    // nip.io DNS rebinding
+  /\d+\.\d+\.\d+\.\d+\.sslip\.io$/i,  // sslip.io DNS rebinding
+  /\d+\.\d+\.\d+\.\d+\.xip\.io$/i,    // xip.io DNS rebinding
+  /^[0-9.]+$/,                         // Pure IP addresses
+];
+
 function validateCrawlerUrl(urlString: string): { valid: boolean; error?: string } {
   try {
     const url = new URL(urlString);
@@ -49,6 +69,13 @@ function validateCrawlerUrl(urlString: string): { valid: boolean; error?: string
     for (const pattern of PRIVATE_IP_PATTERNS) {
       if (pattern.test(hostname)) {
         return { valid: false, error: `Private IP address not allowed: ${hostname}` };
+      }
+    }
+
+    // Block suspicious hostnames (DNS rebinding protection)
+    for (const pattern of SUSPICIOUS_HOSTNAME_PATTERNS) {
+      if (pattern.test(hostname)) {
+        return { valid: false, error: `Suspicious hostname pattern not allowed: ${hostname}` };
       }
     }
 

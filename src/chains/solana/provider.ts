@@ -362,7 +362,7 @@ export class SolanaChainProvider implements IChainProvider {
     // Build GiveFeedbackParams (SDK v0.5.3+ format)
     // feedbackHash is SHA-256 of feedback content (required)
     const feedbackParams = {
-      value: typeof input.value === 'bigint' ? input.value : BigInt(input.value),
+      value: typeof input.value === 'bigint' ? input.value : BigInt(input.value ?? 0),
       valueDecimals: input.valueDecimals ?? 0,
       score: input.score,
       tag1: input.tag1,
@@ -372,7 +372,17 @@ export class SolanaChainProvider implements IChainProvider {
       feedbackHash: input.feedbackFileHash ?? Buffer.alloc(32), // SHA-256 hash of feedback content
     };
 
-    const result = await sdk.giveFeedback(assetPubkey, feedbackParams, { skipSend });
+    // Get signer pubkey - required by SDK even for skipSend
+    const signerInfo = this.state.getSignerInfo();
+    const signerPubkey = signerInfo.publicKey ? new PublicKey(signerInfo.publicKey) : undefined;
+
+    const result = await sdk.giveFeedback(assetPubkey, feedbackParams, { skipSend, signer: signerPubkey });
+
+    // Check for SDK errors first (applies to both skipSend and real send)
+    const maybeError = result as { success?: boolean; error?: string };
+    if (maybeError.success === false && maybeError.error) {
+      throw new Error(maybeError.error);
+    }
 
     if (skipSend) {
       // Return unsigned transaction in base64 format

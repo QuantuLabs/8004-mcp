@@ -1,6 +1,18 @@
 // Default configuration values and network configs
+// NOTE: Registry addresses and subgraph URLs come from the SDKs (agent0-sdk, 8004-solana)
+// This file only contains RPC URLs, block explorers, and chain metadata
 
 import type { ChainType, ChainPrefix } from '../core/interfaces/agent.js';
+import {
+  DEFAULT_REGISTRIES as EVM_DEFAULT_REGISTRIES,
+  DEFAULT_SUBGRAPH_URLS as EVM_DEFAULT_SUBGRAPH_URLS,
+} from 'agent0-sdk';
+import {
+  PROGRAM_ID as SOLANA_PROGRAM_ID,
+  ATOM_ENGINE_PROGRAM_ID as SOLANA_ATOM_ENGINE_PROGRAM_ID,
+  DEFAULT_INDEXER_URL as SOLANA_INDEXER_URL,
+  DEFAULT_INDEXER_API_KEY as SOLANA_INDEXER_API_KEY,
+} from '8004-solana';
 
 // Network mode: testnet for development, mainnet for production
 export type NetworkMode = 'testnet' | 'mainnet';
@@ -23,6 +35,34 @@ export interface ChainNetworkConfig {
   blockExplorer?: string;
 }
 
+// Helper to get EVM registries from SDK (source of truth)
+function getEvmRegistries(chainId: number): { identity: string; reputation: string } {
+  const sdkRegistries = EVM_DEFAULT_REGISTRIES[chainId as keyof typeof EVM_DEFAULT_REGISTRIES];
+  if (sdkRegistries) {
+    return {
+      identity: sdkRegistries.IDENTITY || '',
+      reputation: sdkRegistries.REPUTATION || '',
+    };
+  }
+  return { identity: '', reputation: '' };
+}
+
+// Helper to get EVM subgraph URL from SDK (source of truth)
+function getEvmSubgraphUrl(chainId: number): string {
+  return EVM_DEFAULT_SUBGRAPH_URLS[chainId as keyof typeof EVM_DEFAULT_SUBGRAPH_URLS] || '';
+}
+
+// Helper to get Solana registries from SDK (source of truth)
+// Note: 8004-solana uses a consolidated single program for identity/reputation/validation
+function getSolanaRegistries(): { identity: string; reputation: string; validation: string } {
+  const programId = SOLANA_PROGRAM_ID.toBase58();
+  return {
+    identity: programId,
+    reputation: programId, // Same consolidated program
+    validation: programId,
+  };
+}
+
 // Full chain configuration with both networks
 export interface ChainConfig {
   prefix: ChainPrefix;
@@ -34,7 +74,7 @@ export interface ChainConfig {
 
 // All supported chains with their testnet/mainnet configurations
 export const CHAIN_CONFIGS: Record<ChainPrefix, ChainConfig> = {
-  // Solana
+  // Solana - registries and indexer from 8004-solana SDK (source of truth)
   sol: {
     prefix: 'sol',
     chainType: 'solana',
@@ -42,21 +82,16 @@ export const CHAIN_CONFIGS: Record<ChainPrefix, ChainConfig> = {
     testnet: {
       chainId: 'devnet',
       rpcUrl: 'https://api.devnet.solana.com',
-      // Supabase indexer for Solana devnet
-      indexerUrl: 'https://uhjytdjxvfbppgjicfly.supabase.co/rest/v1',
-      registries: {
-        identity: '8oo4SbcgjRBAXjmGU4YMcdFqfeLLrtn7n6f358PkAc3N',
-        reputation: '8oo4SbcgjRBAXjmGU4YMcdFqfeLLrtn7n6f358PkAc3N', // Same program
-        validation: '8oo4SbcgjRBAXjmGU4YMcdFqfeLLrtn7n6f358PkAc3N',
-      },
+      indexerUrl: SOLANA_INDEXER_URL,
+      registries: getSolanaRegistries(),
       blockExplorer: 'https://explorer.solana.com/?cluster=devnet',
     },
     mainnet: {
       chainId: 'mainnet-beta',
       rpcUrl: 'https://api.mainnet-beta.solana.com',
-      indexerUrl: '', // TBD
+      indexerUrl: '', // TBD - mainnet indexer
       registries: {
-        identity: '', // TBD - mainnet deployment
+        identity: '', // TBD - mainnet deployment (will come from SDK when ready)
         reputation: '',
         validation: '',
       },
@@ -64,7 +99,7 @@ export const CHAIN_CONFIGS: Record<ChainPrefix, ChainConfig> = {
     },
   },
 
-  // Base
+  // Base - registries and subgraph from agent0-sdk (source of truth)
   base: {
     prefix: 'base',
     chainType: 'evm',
@@ -72,55 +107,41 @@ export const CHAIN_CONFIGS: Record<ChainPrefix, ChainConfig> = {
     testnet: {
       chainId: 84532, // Base Sepolia
       rpcUrl: 'https://sepolia.base.org',
-      subgraphUrl: '', // Subgraph deprecated - use on-chain queries
-      registries: {
-        identity: '0x8004AA63c570c570eBF15376c0dB199918BFe9Fb',
-        reputation: '0x8004bd8daB57f14Ed299135749a5CB5c42d341BF',
-      },
+      subgraphUrl: getEvmSubgraphUrl(84532),
+      registries: getEvmRegistries(84532),
       blockExplorer: 'https://sepolia.basescan.org',
     },
     mainnet: {
       chainId: 8453, // Base Mainnet
       rpcUrl: 'https://mainnet.base.org',
-      subgraphUrl: '', // TBD
-      registries: {
-        identity: '', // TBD - mainnet deployment
-        reputation: '',
-      },
+      subgraphUrl: getEvmSubgraphUrl(8453),
+      registries: getEvmRegistries(8453),
       blockExplorer: 'https://basescan.org',
     },
   },
 
-  // Ethereum
+  // Ethereum - registries and subgraph from agent0-sdk (source of truth)
   eth: {
     prefix: 'eth',
     chainType: 'evm',
     displayName: 'Ethereum',
     testnet: {
       chainId: 11155111, // Sepolia
-      // Primary: PublicNode (reliable). Alternatives: 1rpc.io/sepolia, sepolia.drpc.org
       rpcUrl: 'https://ethereum-sepolia-rpc.publicnode.com',
-      subgraphUrl: 'https://gateway.thegraph.com/api/00a452ad3cd1900273ea62c1bf283f93/subgraphs/id/6wQRC7geo9XYAhckfmfo8kbMRLeWU8KQd3XsJqFKmZLT',
-      registries: {
-        identity: '0x8004a6090Cd10A7288092483047B097295Fb8847',
-        reputation: '0x8004B8FD1A363aa02fDC07635C0c5F94f6Af5B7E',
-      },
+      subgraphUrl: getEvmSubgraphUrl(11155111),
+      registries: getEvmRegistries(11155111),
       blockExplorer: 'https://sepolia.etherscan.io',
     },
     mainnet: {
       chainId: 1, // Ethereum Mainnet
-      // Primary: PublicNode (reliable, no rate limit). Alternatives: 1rpc.io/eth, eth.drpc.org
       rpcUrl: 'https://ethereum-rpc.publicnode.com',
-      subgraphUrl: 'https://gateway.thegraph.com/api/7fd2e7d89ce3ef24cd0d4590298f0b2c/subgraphs/id/FV6RR6y13rsnCxBAicKuQEwDp8ioEGiNaWaZUmvr1F8k',
-      registries: {
-        identity: '0x8004a6090Cd10A7288092483047B097295Fb8847',
-        reputation: '0x8004B663056A597Dffe9eCcC1965A193B7388713',
-      },
+      subgraphUrl: getEvmSubgraphUrl(1),
+      registries: getEvmRegistries(1),
       blockExplorer: 'https://etherscan.io',
     },
   },
 
-  // Arbitrum
+  // Arbitrum - registries and subgraph from agent0-sdk (source of truth)
   arb: {
     prefix: 'arb',
     chainType: 'evm',
@@ -128,26 +149,20 @@ export const CHAIN_CONFIGS: Record<ChainPrefix, ChainConfig> = {
     testnet: {
       chainId: 421614, // Arbitrum Sepolia
       rpcUrl: 'https://sepolia-rollup.arbitrum.io/rpc',
-      subgraphUrl: '', // TBD
-      registries: {
-        identity: '', // TBD
-        reputation: '',
-      },
+      subgraphUrl: getEvmSubgraphUrl(421614),
+      registries: getEvmRegistries(421614),
       blockExplorer: 'https://sepolia.arbiscan.io',
     },
     mainnet: {
       chainId: 42161, // Arbitrum One
       rpcUrl: 'https://arb1.arbitrum.io/rpc',
-      subgraphUrl: '', // TBD
-      registries: {
-        identity: '', // TBD
-        reputation: '',
-      },
+      subgraphUrl: getEvmSubgraphUrl(42161),
+      registries: getEvmRegistries(42161),
       blockExplorer: 'https://arbiscan.io',
     },
   },
 
-  // Polygon
+  // Polygon - registries and subgraph from agent0-sdk (source of truth)
   poly: {
     prefix: 'poly',
     chainType: 'evm',
@@ -155,27 +170,20 @@ export const CHAIN_CONFIGS: Record<ChainPrefix, ChainConfig> = {
     testnet: {
       chainId: 80002, // Polygon Amoy
       rpcUrl: 'https://rpc-amoy.polygon.technology',
-      subgraphUrl: '', // Subgraph deprecated - use on-chain queries
-      registries: {
-        identity: '0x8004ad19E14B9e0654f73353e8a0B600D46C2898',
-        reputation: '0x8004B12F4C2B42d00c46479e859C92e39044C930',
-      },
+      subgraphUrl: getEvmSubgraphUrl(80002),
+      registries: getEvmRegistries(80002),
       blockExplorer: 'https://amoy.polygonscan.com',
     },
     mainnet: {
       chainId: 137, // Polygon PoS
-      // Primary: PublicNode (reliable). Alternatives: 1rpc.io/matic, polygon-rpc.com
       rpcUrl: 'https://polygon-bor-rpc.publicnode.com',
-      subgraphUrl: '', // TBD
-      registries: {
-        identity: '', // TBD
-        reputation: '',
-      },
+      subgraphUrl: getEvmSubgraphUrl(137),
+      registries: getEvmRegistries(137),
       blockExplorer: 'https://polygonscan.com',
     },
   },
 
-  // Optimism
+  // Optimism - registries and subgraph from agent0-sdk (source of truth)
   op: {
     prefix: 'op',
     chainType: 'evm',
@@ -183,21 +191,15 @@ export const CHAIN_CONFIGS: Record<ChainPrefix, ChainConfig> = {
     testnet: {
       chainId: 11155420, // Optimism Sepolia
       rpcUrl: 'https://sepolia.optimism.io',
-      subgraphUrl: '', // TBD
-      registries: {
-        identity: '', // TBD
-        reputation: '',
-      },
+      subgraphUrl: getEvmSubgraphUrl(11155420),
+      registries: getEvmRegistries(11155420),
       blockExplorer: 'https://sepolia-optimism.etherscan.io',
     },
     mainnet: {
       chainId: 10, // Optimism Mainnet
       rpcUrl: 'https://mainnet.optimism.io',
-      subgraphUrl: '', // TBD
-      registries: {
-        identity: '', // TBD
-        reputation: '',
-      },
+      subgraphUrl: getEvmSubgraphUrl(10),
+      registries: getEvmRegistries(10),
       blockExplorer: 'https://optimistic.etherscan.io',
     },
   },
@@ -253,21 +255,20 @@ export function getNetworkDisplayName(prefix: ChainPrefix, networkMode: NetworkM
   return `${config.displayName} ${testnetNames[prefix] ?? chainIdStr}`;
 }
 
-// Legacy exports for backward compatibility
+// Legacy exports for backward compatibility - values from SDKs (source of truth)
 export const DEFAULT_SOLANA_CLUSTER = 'devnet' as const;
 export const DEFAULT_SOLANA_RPC_URL = CHAIN_CONFIGS.sol.testnet.rpcUrl;
-export const DEFAULT_INDEXER_URL = CHAIN_CONFIGS.sol.testnet.indexerUrl ?? '';
-// Supabase anon key for read-only indexer access (safe to commit)
-export const DEFAULT_INDEXER_API_KEY = 'sb_publishable_i-ycBRGiolBr8GMdiVq1rA_nwt7N2bq';
+export const DEFAULT_INDEXER_URL = SOLANA_INDEXER_URL;
+export const DEFAULT_INDEXER_API_KEY = SOLANA_INDEXER_API_KEY;
 
 export const SOLANA_PROGRAM_IDS = {
   devnet: {
-    agentRegistry: CHAIN_CONFIGS.sol.testnet.registries.identity,
-    atomEngine: 'AToMNmthLzvTy3D2kz2obFmbVCsTCmYpDw1ptWUJdeU8',
+    agentRegistry: SOLANA_PROGRAM_ID.toBase58(),
+    atomEngine: SOLANA_ATOM_ENGINE_PROGRAM_ID.toBase58(),
   },
   'mainnet-beta': {
-    agentRegistry: CHAIN_CONFIGS.sol.mainnet.registries.identity,
-    atomEngine: '', // TBD
+    agentRegistry: '', // TBD - will come from SDK when deployed
+    atomEngine: '',
   },
   testnet: {
     agentRegistry: '',

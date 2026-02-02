@@ -17,6 +17,7 @@ import {
   getNetworkDisplayName,
 } from '../config/defaults.js';
 import type { ChainPrefix } from '../core/interfaces/agent.js';
+import { EVMChainProvider } from '../chains/evm/provider.js';
 
 export interface IGlobalStateConfig {
   autoSync?: boolean;          // Only used with legacy cache
@@ -76,6 +77,8 @@ class GlobalState {
   private _crawlerTimeoutMs: number;
   private _ipfsService: IPFSService;
   private _initialized = false;
+  // Cache of unregistered providers for re-registration on network switch
+  private _dormantProviders: Map<string, IChainProvider> = new Map();
 
   constructor() {
     this._config = loadEnvConfig();
@@ -104,10 +107,23 @@ class GlobalState {
 
   setNetworkMode(mode: NetworkMode): { previous: NetworkMode; current: NetworkMode; deployedChains: ChainPrefix[] } {
     const previous = this._networkMode;
+    if (previous === mode) {
+      // No change, return current state
+      return {
+        previous,
+        current: mode,
+        deployedChains: getDeployedChains(mode),
+      };
+    }
+
     this._networkMode = mode;
 
-    // Invalidate chain providers so they reconfigure with new network settings
-    this._chainRegistry.invalidateAll();
+    // Re-register providers for the new network mode
+    // Each chain type has its own re-registration strategy:
+    // - EVM: chainId changes per network, so unregister/register
+    // - Solana: chainId stays 'sol', but config changes (cluster, RPC, indexer)
+    // - Future chains: can implement their own pattern
+    this._switchProvidersNetwork(mode);
 
     const deployedChains = getDeployedChains(mode);
 
@@ -116,6 +132,93 @@ class GlobalState {
       current: mode,
       deployedChains,
     };
+  }
+
+  // Switch all providers to a new network mode
+  // Extensible pattern for multiple chain types
+  private _switchProvidersNetwork(mode: NetworkMode): void {
+    // 1. Handle Solana providers (config update, same registry key)
+    this._updateSolanaProviders(mode);
+
+    // 2. Handle EVM providers (re-registration, chainId changes)
+    this._reregisterEVMProviders(mode);
+
+    // 3. Invalidate all SDKs to force reconnection with new config
+    this._chainRegistry.invalidateAll();
+  }
+
+  // Update Solana provider config for new network mode
+  // Solana chainId stays 'sol', but cluster/RPC/indexer change
+  private _updateSolanaProviders(mode: NetworkMode): void {
+    // Check if Solana is deployed for this network mode
+    const networkConfig = getChainNetworkConfig('sol', mode);
+    const isDeployed = !!(networkConfig && networkConfig.registries.identity);
+
+    // Try to get active Solana provider
+    let solanaProvider = this._chainRegistry.getByPrefix('sol');
+
+    // If not registered but we have a dormant one, check if we should reactivate
+    if (!solanaProvider && isDeployed) {
+      const dormantSolana = this._dormantProviders.get('sol');
+      if (dormantSolana) {
+        // Re-register the dormant provider
+        this._chainRegistry.register(dormantSolana);
+        this._dormantProviders.delete('sol');
+        solanaProvider = dormantSolana;
+      }
+    }
+
+    if (!solanaProvider) return;
+
+    if (!isDeployed) {
+      // Solana not deployed for this network mode, make it dormant
+      this._dormantProviders.set('sol', solanaProvider);
+      this._chainRegistry.unregister('sol');
+      return;
+    }
+
+    // Update Solana provider's state config
+    // The SolanaStateManager has setConfig() which invalidates SDK
+    if ('getState' in solanaProvider && typeof solanaProvider.getState === 'function') {
+      const state = (solanaProvider as { getState: () => { setConfig: (cfg: object) => void } }).getState();
+      state.setConfig({
+        cluster: networkConfig.chainId as 'devnet', // TODO: extend when mainnet-beta is supported
+        rpcUrl: networkConfig.rpcUrl,
+        indexerUrl: networkConfig.indexerUrl,
+      });
+    }
+  }
+
+  // Re-register EVM providers for a new network mode
+  // EVM chainIds change per network (e.g., base:84532 vs base:8453)
+  private _reregisterEVMProviders(mode: NetworkMode): void {
+    // 1. Unregister all existing EVM providers
+    const evmProviders = this._chainRegistry.getAllByType('evm');
+    for (const provider of evmProviders) {
+      const config = provider.getConfig();
+      const chainId = `${provider.chainPrefix}:${config.chainId}`;
+      this._chainRegistry.unregister(chainId);
+    }
+
+    // 2. Register new EVM providers for deployed chains in the new network mode
+    const deployedChains = getDeployedChains(mode);
+    const evmChains = deployedChains.filter(
+      (prefix) => CHAIN_CONFIGS[prefix]?.chainType === 'evm'
+    );
+
+    for (const prefix of evmChains) {
+      const chainConfig = CHAIN_CONFIGS[prefix];
+      const networkConfig = mode === 'mainnet' ? chainConfig.mainnet : chainConfig.testnet;
+
+      const evmProvider = new EVMChainProvider({
+        chainId: networkConfig.chainId as number,
+        chainPrefix: prefix,
+        rpcUrl: networkConfig.rpcUrl,
+        subgraphUrl: networkConfig.subgraphUrl,
+      });
+
+      this._chainRegistry.register(evmProvider);
+    }
   }
 
   // Get network status
