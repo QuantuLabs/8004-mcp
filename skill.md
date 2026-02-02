@@ -213,19 +213,23 @@ Write operations require an unlocked wallet.
 
 ### Creating Wallets
 
+> ⚠️ **CRITICAL: Save your password!**
+> The password encrypts your wallet locally. **If you lose it, you CANNOT unlock the wallet or recover the private key.**
+> Store it securely (password manager, encrypted notes, etc.) immediately after creation.
+
 ```javascript
 // Create new Solana wallet
 await callTool('wallet_create', {
   name: 'my-agent-wallet',
   chain: 'solana',
-  password: 'secure-password-123'
+  password: 'secure-password-123'  // SAVE THIS PASSWORD!
 });
 
 // Create EVM wallet
 await callTool('wallet_create', {
   name: 'evm-wallet',
   chain: 'evm',
-  password: 'secure-password-123'
+  password: 'secure-password-123'  // SAVE THIS PASSWORD!
 });
 ```
 
@@ -432,6 +436,7 @@ Common errors and solutions:
 | Error | Cause | Solution |
 |-------|-------|----------|
 | "Write operations require an unlocked wallet" | No wallet unlocked | Call `wallet_unlock` first |
+| "Invalid password" | Wrong password for wallet | Use the correct password (⚠️ cannot be recovered if lost) |
 | "Agent not found" | Invalid ID or wrong chain | Verify global ID format |
 | "Insufficient balance" | Wallet needs funding | Fund the wallet address |
 | "Provider not available" | Chain not initialized | Check `network_status` |
@@ -603,6 +608,7 @@ const identity = await callTool('x402_identity_build', {
 
 All write operations require:
 1. **Wallet created**: `wallet_create` or `wallet_import`
+   - ⚠️ **Store the password securely** - it cannot be recovered if lost!
 2. **Wallet unlocked**: `wallet_unlock` with password and duration
 3. **Sufficient balance**: SOL for Solana, ETH/native token for EVM
 
