@@ -14,6 +14,7 @@ import type { EVMChainProvider } from '../../chains/evm/provider.js';
 import { PublicKey, LAMPORTS_PER_SOL } from '@solana/web3.js';
 import { ACCOUNT_SIZES, calculateRentExempt } from '8004-solana';
 import { createPublicClient, http, formatEther } from 'viem';
+import { extractTokenId } from '../../core/utils/agent-id.js';
 
 export const registrationTools: Tool[] = [
   {
@@ -268,15 +269,16 @@ async function registerEvmAgent(params: {
   // Wait for transaction to be mined (returns { receipt, result })
   const { receipt, result: registrationFile } = await txHandle.waitMined();
 
-  // agentId is now set on the agent object after confirmation
-  const agentId = agent.agentId;
+  // SDK may return agentId as "chainId:tokenId" - extract just tokenId
+  const rawAgentId = agent.agentId;
+  const tokenId = rawAgentId ? extractTokenId(rawAgentId) : undefined;
   const chainId = await sdk.chainId();
 
   return successResponse({
     unsigned: false,
     txHash: receipt.transactionHash,
-    agentId,
-    globalId: agentId ? `${chainPrefix}:${chainId}:${agentId}` : undefined,
+    agentId: tokenId,
+    globalId: tokenId ? `${chainPrefix}:${chainId}:${tokenId}` : undefined,
     name: agentName,
     tokenUri: agent.agentURI,
     message: `Agent registered successfully on ${chainPrefix}.`,

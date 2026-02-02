@@ -14,7 +14,8 @@ import { successResponse } from '../../core/serializers/common.js';
 import { globalState } from '../../state/global-state.js';
 import type { SolanaChainProvider } from '../../chains/solana/provider.js';
 import type { EVMChainProvider } from '../../chains/evm/provider.js';
-import { parseGlobalId, isValidGlobalId } from '../../core/interfaces/agent.js';
+import { parseGlobalId, isValidGlobalId, type ChainPrefix } from '../../core/interfaces/agent.js';
+import { parseEvmAgentId, isChainId } from '../../core/utils/agent-id.js';
 
 export const writeOperationTools: Tool[] = [
   // Agent Transfer
@@ -340,14 +341,29 @@ export const writeOperationHandlers: Record<string, (args: unknown) => Promise<u
     const { chainPrefix } = parseChainParam(input);
     const skipSend = readBoolean(input, 'skipSend') ?? false;
 
-    let targetChain = chainPrefix;
+    // Determine chain and parse ID
+    const firstPart = id.split(':')[0] || id;
+    const isEvmNumericId = isChainId(firstPart);
+
+    // If ID starts with chainId (numeric) or has EVM prefix, it's EVM
+    let targetChain: ChainPrefix | undefined = chainPrefix as ChainPrefix | undefined;
     let rawId = id;
-    if (isValidGlobalId(id)) {
-      const parsed = parseGlobalId(id);
+
+    if (firstPart === 'sol') {
+      targetChain = 'sol';
+      rawId = parseGlobalId(id).rawId;
+    } else if (isEvmNumericId || ['eth', 'base', 'arb', 'poly', 'op'].includes(firstPart)) {
+      // EVM ID - use parseEvmAgentId for proper handling
+      const defaultProvider = globalState.chains.getDefault() as EVMChainProvider | null;
+      const defaultChainId = defaultProvider ? parseInt(defaultProvider.chainId.split(':')[1] || '1', 10) : undefined;
+      const parsed = parseEvmAgentId(id, { prefix: chainPrefix as ChainPrefix | undefined, chainId: defaultChainId });
       targetChain = parsed.prefix;
-      rawId = parsed.rawId;
+      rawId = parsed.sdkId; // SDK expects "chainId:tokenId" format
+    } else if (chainPrefix) {
+      targetChain = chainPrefix as ChainPrefix;
     }
-    targetChain = targetChain || globalState.chains.getDefault()?.chainPrefix || 'sol';
+
+    targetChain = targetChain || globalState.chains.getDefault()?.chainPrefix as ChainPrefix || 'sol';
 
     if (targetChain === 'sol') {
       const provider = globalState.chains.getByPrefix('sol') as SolanaChainProvider | null;
@@ -380,7 +396,7 @@ export const writeOperationHandlers: Record<string, (args: unknown) => Promise<u
       });
     } else {
       // EVM - need to load agent and call setAgentURI
-      const provider = globalState.chains.getByPrefix(targetChain as 'eth' | 'base') as EVMChainProvider | null;
+      const provider = globalState.chains.getByPrefix(targetChain) as EVMChainProvider | null;
       if (!provider) throw new Error(`EVM provider not available for chain: ${targetChain}`);
       if (!provider.canWrite()) {
         throw new Error('Write operations require an unlocked wallet');
@@ -651,15 +667,34 @@ export const writeOperationHandlers: Record<string, (args: unknown) => Promise<u
     const newWallet = readString(input, 'newWallet', true);
     const { chainPrefix } = parseChainParam(input);
 
-    const targetChain = chainPrefix || 'eth';
-    const provider = globalState.chains.getByPrefix(targetChain as 'eth' | 'base') as EVMChainProvider | null;
+    // Normalize ID to SDK format (chainId:tokenId)
+    const firstPart = id.split(':')[0] || id;
+    let targetChain: ChainPrefix = (chainPrefix as ChainPrefix) || 'eth';
+    let sdkId = id;
+
+    if (isChainId(firstPart) || ['eth', 'base', 'arb', 'poly', 'op'].includes(firstPart)) {
+      const provider = globalState.chains.getDefault() as EVMChainProvider | null;
+      const defaultChainId = provider ? parseInt(provider.chainId.split(':')[1] || '1', 10) : undefined;
+      const parsed = parseEvmAgentId(id, { prefix: chainPrefix as ChainPrefix | undefined, chainId: defaultChainId });
+      targetChain = parsed.prefix;
+      sdkId = parsed.sdkId;
+    } else {
+      // Raw tokenId - need chain context
+      const provider = globalState.chains.getByPrefix(targetChain) as EVMChainProvider | null;
+      if (provider) {
+        const chainId = parseInt(provider.chainId.split(':')[1] || '1', 10);
+        sdkId = `${chainId}:${id}`;
+      }
+    }
+
+    const provider = globalState.chains.getByPrefix(targetChain) as EVMChainProvider | null;
     if (!provider) throw new Error(`EVM provider not available for chain: ${targetChain}`);
     if (!provider.canWrite()) {
       throw new Error('Write operations require an unlocked wallet');
     }
 
     const sdk = provider.getSdk();
-    const agent = await sdk.loadAgent(id);
+    const agent = await sdk.loadAgent(sdkId);
     const txHash = await agent.setWallet(newWallet as `0x${string}`);
 
     return successResponse({
@@ -675,15 +710,34 @@ export const writeOperationHandlers: Record<string, (args: unknown) => Promise<u
     const id = readString(input, 'id', true);
     const { chainPrefix } = parseChainParam(input);
 
-    const targetChain = chainPrefix || 'eth';
-    const provider = globalState.chains.getByPrefix(targetChain as 'eth' | 'base') as EVMChainProvider | null;
+    // Normalize ID to SDK format (chainId:tokenId)
+    const firstPart = id.split(':')[0] || id;
+    let targetChain: ChainPrefix = (chainPrefix as ChainPrefix) || 'eth';
+    let sdkId = id;
+
+    if (isChainId(firstPart) || ['eth', 'base', 'arb', 'poly', 'op'].includes(firstPart)) {
+      const defaultProvider = globalState.chains.getDefault() as EVMChainProvider | null;
+      const defaultChainId = defaultProvider ? parseInt(defaultProvider.chainId.split(':')[1] || '1', 10) : undefined;
+      const parsed = parseEvmAgentId(id, { prefix: chainPrefix as ChainPrefix | undefined, chainId: defaultChainId });
+      targetChain = parsed.prefix;
+      sdkId = parsed.sdkId;
+    } else {
+      // Raw tokenId - need chain context
+      const ctxProvider = globalState.chains.getByPrefix(targetChain) as EVMChainProvider | null;
+      if (ctxProvider) {
+        const chainId = parseInt(ctxProvider.chainId.split(':')[1] || '1', 10);
+        sdkId = `${chainId}:${id}`;
+      }
+    }
+
+    const provider = globalState.chains.getByPrefix(targetChain) as EVMChainProvider | null;
     if (!provider) throw new Error(`EVM provider not available for chain: ${targetChain}`);
     if (!provider.canWrite()) {
       throw new Error('Write operations require an unlocked wallet');
     }
 
     const sdk = provider.getSdk();
-    const agent = await sdk.loadAgent(id);
+    const agent = await sdk.loadAgent(sdkId);
     const txHash = await agent.unsetWallet();
 
     return successResponse({

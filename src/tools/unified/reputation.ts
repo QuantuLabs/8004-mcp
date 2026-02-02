@@ -10,7 +10,9 @@ import {
 } from '../../core/parsers/common.js';
 import { successResponse } from '../../core/serializers/common.js';
 import { globalState } from '../../state/global-state.js';
-import { parseGlobalId, isValidGlobalId } from '../../core/interfaces/agent.js';
+import { parseGlobalId, type ChainPrefix } from '../../core/interfaces/agent.js';
+import { parseEvmAgentId, isChainId } from '../../core/utils/agent-id.js';
+import type { EVMChainProvider } from '../../chains/evm/provider.js';
 
 export const reputationTools: Tool[] = [
   {
@@ -68,17 +70,37 @@ export const reputationHandlers: Record<string, (args: unknown) => Promise<unkno
     const agentId = readString(input, 'id', true);
     const { chainPrefix } = parseChainParam(input);
 
+    // Resolve provider and normalize ID
     let provider;
     let rawId = agentId;
+    const firstPart = agentId.split(':')[0] || agentId;
 
-    if (isValidGlobalId(agentId)) {
+    if (firstPart === 'sol') {
+      // Solana global ID
       const parsed = parseGlobalId(agentId);
-      provider = globalState.chains.getByPrefix(parsed.prefix);
+      provider = globalState.chains.getByPrefix('sol');
       rawId = parsed.rawId;
+    } else if (isChainId(firstPart) || ['eth', 'base', 'arb', 'poly', 'op'].includes(firstPart)) {
+      // EVM ID in any format
+      const defaultProvider = globalState.chains.getDefault() as EVMChainProvider | null;
+      const defaultChainId = defaultProvider ? parseInt(defaultProvider.chainId.split(':')[1] || '1', 10) : undefined;
+      const parsed = parseEvmAgentId(agentId, { prefix: chainPrefix as ChainPrefix | undefined, chainId: defaultChainId });
+      provider = globalState.chains.getByPrefix(parsed.prefix);
+      rawId = parsed.sdkId;
     } else if (chainPrefix) {
-      provider = globalState.chains.getByPrefix(chainPrefix as 'sol' | 'base' | 'eth' | 'arb' | 'poly' | 'op');
+      provider = globalState.chains.getByPrefix(chainPrefix as ChainPrefix);
+      if (provider?.chainType === 'evm') {
+        const evmProvider = provider as EVMChainProvider;
+        const chainId = parseInt(evmProvider.chainId.split(':')[1] || '1', 10);
+        rawId = `${chainId}:${agentId}`;
+      }
     } else {
       provider = globalState.chains.getDefault();
+      if (provider?.chainType === 'evm') {
+        const evmProvider = provider as EVMChainProvider;
+        const chainId = parseInt(evmProvider.chainId.split(':')[1] || '1', 10);
+        rawId = `${chainId}:${agentId}`;
+      }
     }
 
     if (!provider) {

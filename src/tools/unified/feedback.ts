@@ -12,10 +12,12 @@ import {
 } from '../../core/parsers/common.js';
 import { successResponse } from '../../core/serializers/common.js';
 import { globalState } from '../../state/global-state.js';
-import { parseGlobalId, isValidGlobalId } from '../../core/interfaces/agent.js';
+import { parseGlobalId, isValidGlobalId, type ChainPrefix } from '../../core/interfaces/agent.js';
 import type { IWritableChainProvider } from '../../core/interfaces/chain-provider.js';
 import { isWritableProvider } from '../../core/interfaces/chain-provider.js';
 import { encodeReputationValue } from '../../core/utils/value-encoding.js';
+import { parseEvmAgentId, isChainId } from '../../core/utils/agent-id.js';
+import type { EVMChainProvider } from '../../chains/evm/provider.js';
 
 export const feedbackTools: Tool[] = [
   {
@@ -163,18 +165,39 @@ export const feedbackHandlers: Record<string, (args: unknown) => Promise<unknown
       throw new Error('score must be between 0 and 100');
     }
 
-    // Resolve provider
+    // Resolve provider and normalize ID
     let provider;
     let rawId = agentId;
+    const firstPart = agentId.split(':')[0] || agentId;
 
-    if (isValidGlobalId(agentId)) {
+    if (firstPart === 'sol') {
+      // Solana global ID: sol:pubkey
       const parsed = parseGlobalId(agentId);
-      provider = globalState.chains.getByPrefix(parsed.prefix);
+      provider = globalState.chains.getByPrefix('sol');
       rawId = parsed.rawId;
+    } else if (isChainId(firstPart) || ['eth', 'base', 'arb', 'poly', 'op'].includes(firstPart)) {
+      // EVM ID: chainId:tokenId, prefix:tokenId, or prefix:chainId:tokenId
+      const defaultProvider = globalState.chains.getDefault() as EVMChainProvider | null;
+      const defaultChainId = defaultProvider ? parseInt(defaultProvider.chainId.split(':')[1] || '1', 10) : undefined;
+      const parsed = parseEvmAgentId(agentId, { prefix: chainPrefix as ChainPrefix | undefined, chainId: defaultChainId });
+      provider = globalState.chains.getByPrefix(parsed.prefix);
+      rawId = parsed.sdkId; // SDK expects "chainId:tokenId" format
     } else if (chainPrefix) {
-      provider = globalState.chains.getByPrefix(chainPrefix as 'sol' | 'base' | 'eth' | 'arb' | 'poly' | 'op');
+      // Raw ID with explicit chain: use chain context
+      provider = globalState.chains.getByPrefix(chainPrefix as ChainPrefix);
+      if (provider?.chainType === 'evm') {
+        const evmProvider = provider as EVMChainProvider;
+        const chainId = parseInt(evmProvider.chainId.split(':')[1] || '1', 10);
+        rawId = `${chainId}:${agentId}`; // Convert raw tokenId to SDK format
+      }
     } else {
+      // No chain context - use default
       provider = globalState.chains.getDefault();
+      if (provider?.chainType === 'evm') {
+        const evmProvider = provider as EVMChainProvider;
+        const chainId = parseInt(evmProvider.chainId.split(':')[1] || '1', 10);
+        rawId = `${chainId}:${agentId}`; // Convert raw tokenId to SDK format
+      }
     }
 
     if (!provider) {
