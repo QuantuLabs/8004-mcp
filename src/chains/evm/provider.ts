@@ -34,6 +34,7 @@ import type {
   ILeaderboardResult,
 } from '../../core/interfaces/reputation.js';
 import { TrustTier, getTrustTierName } from '../../core/interfaces/reputation.js';
+import { matchesSearchFilter } from '../../core/utils/search-filter.js';
 import { getWalletManager } from '../../core/wallet/index.js';
 
 export interface IEVMConfig {
@@ -201,25 +202,22 @@ export class EVMChainProvider implements IChainProvider {
           offset
         );
 
-        // Apply client-side filtering if needed
+        // Apply client-side filtering if needed (using centralized helper)
         let filteredAgents = agents;
         if (endpointFilter) {
-          const lowerEndpoint = endpointFilter.toLowerCase();
-          filteredAgents = agents.filter((a: AgentSummary) => {
-            // Search in mcpTools, a2aSkills, mcpPrompts, mcpResources
-            const allCapabilities = [
-              ...(a.mcpTools ?? []),
-              ...(a.a2aSkills ?? []),
-              ...(a.mcpPrompts ?? []),
-              ...(a.mcpResources ?? []),
-            ];
-            // Also match if looking for mcp/a2a support
-            if (lowerEndpoint === 'mcp' && a.mcp) return true;
-            if (lowerEndpoint === 'a2a' && a.a2a) return true;
-            return allCapabilities.some(cap =>
-              cap.toLowerCase().includes(lowerEndpoint)
-            );
-          });
+          filteredAgents = agents.filter((a: AgentSummary) =>
+            matchesSearchFilter(
+              {
+                mcpEndpoint: a.mcp ? 'mcp' : undefined,
+                a2aEndpoint: a.a2a ? 'a2a' : undefined,
+                mcpTools: a.mcpTools,
+                a2aSkills: a.a2aSkills,
+                mcpPrompts: a.mcpPrompts,
+                mcpResources: a.mcpResources,
+              },
+              { endpointQuery: endpointFilter, searchMode: 'endpoint' }
+            )
+          );
         }
 
         // Apply limit after filtering
@@ -580,13 +578,70 @@ export class EVMChainProvider implements IChainProvider {
     return !!this.config.subgraphUrl;
   }
 
-  async getLeaderboard(_options?: ILeaderboardOptions): Promise<ILeaderboardResult> {
-    // Leaderboard requires subgraph - not yet implemented
-    console.warn('EVMChainProvider.getLeaderboard not yet implemented');
-    return {
-      entries: [],
-      total: 0,
-      hasMore: false,
-    };
+  async getLeaderboard(options?: ILeaderboardOptions): Promise<ILeaderboardResult> {
+    const limit = options?.limit ?? 20;
+    const offset = options?.offset ?? 0;
+
+    try {
+      const sdk = this.getSdk();
+
+      // Use searchAgentsByReputation with sorting by reputation
+      const results = await sdk.searchAgentsByReputation(
+        {
+          minAverageValue: options?.minFeedbacks ? 1 : undefined,
+        },
+        {
+          pageSize: limit + offset, // Fetch enough to skip offset
+          sort: ['createdAt:desc'], // Sort by newest (SDK doesn't support averageValue sort)
+          includeRevoked: false,
+        }
+      );
+
+      // Skip offset and take limit
+      const agents = results.items.slice(offset, offset + limit);
+
+      // Fetch reputation for each agent to build leaderboard entries
+      const entries = await Promise.all(
+        agents.map(async (agent, index) => {
+          const reputation = await this.getReputationSummary(agent.agentId);
+          return {
+            rank: offset + index + 1,
+            agentId: agent.agentId,
+            globalId: toGlobalId(this.chainPrefix, agent.agentId, String(this.config.chainId)),
+            name: agent.name ?? `Agent #${agent.agentId}`,
+            chainType: 'evm' as const,
+            trustTier: reputation?.trustTier ?? TrustTier.Unrated,
+            qualityScore: reputation?.qualityScore ?? 0,
+            totalFeedbacks: reputation?.totalFeedbacks ?? 0,
+          };
+        })
+      );
+
+      // Sort by quality score descending, then by feedback count
+      entries.sort((a, b) => {
+        if (b.qualityScore !== a.qualityScore) {
+          return b.qualityScore - a.qualityScore;
+        }
+        return b.totalFeedbacks - a.totalFeedbacks;
+      });
+
+      // Re-assign ranks after sorting
+      entries.forEach((entry, i) => {
+        entry.rank = offset + i + 1;
+      });
+
+      return {
+        entries,
+        total: results.items.length,
+        hasMore: !!results.nextCursor,
+      };
+    } catch (err) {
+      console.warn('EVMChainProvider.getLeaderboard error:', err);
+      return {
+        entries: [],
+        total: 0,
+        hasMore: false,
+      };
+    }
   }
 }

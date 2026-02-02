@@ -1,14 +1,6 @@
 # Changelog
 
-## [0.2.4] - 2026-02-01
-
-### Documentation
-- Added profile-specific workflows (Beginners, Developers, Agent Owners, AI Agents)
-- Added search behavior tips (cache_search for fuzzy, agent_search for exact)
-- Added write operation prerequisites and error handling guide
-- Added transaction preview examples with skipSend parameter
-
-## [0.2.0] - 2026-01-31
+## [0.2.2] - 2026-02-01
 
 ### Security
 - SQL injection prevention via column whitelist in cache queries
@@ -19,11 +11,20 @@
 - Advanced SDK search filters: `mcpTools`, `a2aSkills`, `active`, `x402support`, `hasMcp`, `hasA2a`
 - Multi-chain agent search with parallel queries
 - Full-text search via SQLite FTS5 cache
+- Cursor-based pagination for EVM chains
+
+### Documentation
+- Profile-specific workflows (Beginners, Developers, Agent Owners, AI Agents)
+- Search behavior tips (cache_search for fuzzy, agent_search for exact)
+- Write operation prerequisites and error handling guide
+- Transaction preview examples with skipSend parameter
+- Wallet password security warnings
 
 ### Fixed
 - Use viem `formatUnits()` for decimal precision
 - Preserve error stack traces in logging
 - Wallet import now correctly generates session token
+- Test cleanup scripts to kill orphan vitest processes
 
 ### Changed
 - Removed tracked scripts with hardcoded test credentials

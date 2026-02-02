@@ -129,7 +129,46 @@ await callTool('agent_search', {
   owner: '0xad55F26876d0dEB7c9...',
   chain: 'eth'
 });
+
+// Advanced EVM filters
+await callTool('agent_search', {
+  chain: 'base',
+  mcpTools: ['web-search'],    // Agents with specific MCP tools
+  a2aSkills: ['translation'],  // Agents with A2A skills
+  active: true,                // Only active agents
+  x402support: true,           // Supports x402 payments
+  hasMcp: true,                // Has MCP endpoint
+  hasA2a: true,                // Has A2A endpoint
+});
 ```
+
+#### Pagination: Cursor vs Offset
+
+**For EVM chains**, use cursor-based pagination for efficient iteration through large result sets:
+
+```javascript
+// First page
+const page1 = await callTool('agent_search', {
+  chain: 'base',
+  query: 'trading',
+  limit: 20
+});
+
+// Next page (O(1) lookup with cursor)
+const page2 = await callTool('agent_search', {
+  chain: 'base',
+  query: 'trading',
+  limit: 20,
+  cursor: page1.cursor  // Use returned cursor
+});
+```
+
+| Method | Performance | Best For |
+|--------|-------------|----------|
+| `cursor` | O(1) | Large result sets, infinite scroll |
+| `offset` | O(N) | Small sets, random access |
+
+**Note**: Solana uses offset-based pagination only. EVM supports both.
 
 ### 2. Getting Agent Details
 

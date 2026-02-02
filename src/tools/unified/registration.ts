@@ -239,21 +239,26 @@ async function registerEvmAgent(params: {
     await agent.setA2A(a2aEndpoint);
   }
 
-  // Register on-chain
-  let registrationFile;
+  // Register on-chain and wait for confirmation
+  let txHandle;
   if (tokenUri) {
     // Use provided URI (HTTP or IPFS)
-    registrationFile = await agent.registerHTTP(tokenUri);
+    txHandle = await agent.registerHTTP(tokenUri);
   } else {
     // Upload to IPFS and register
-    registrationFile = await agent.registerIPFS();
+    txHandle = await agent.registerIPFS();
   }
 
+  // Wait for transaction to be mined (returns { receipt, result })
+  const { receipt, result: registrationFile } = await txHandle.waitMined();
+
+  // agentId is now set on the agent object after confirmation
   const agentId = agent.agentId;
   const chainId = await sdk.chainId();
 
   return successResponse({
     unsigned: false,
+    txHash: receipt.transactionHash,
     agentId,
     globalId: agentId ? `${chainPrefix}:${chainId}:${agentId}` : undefined,
     name: agentName,

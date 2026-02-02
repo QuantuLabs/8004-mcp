@@ -28,6 +28,11 @@ import type {
   ILeaderboardResult,
 } from '../../core/interfaces/reputation.js';
 import { TrustTier, getTrustTierName } from '../../core/interfaces/reputation.js';
+import {
+  matchesSearchFilter,
+  matchesQualityScore,
+  matchesTrustTier,
+} from '../../core/utils/search-filter.js';
 import { SolanaStateManager } from './state.js';
 import type { ISolanaConfig } from './state.js';
 import type { AgentAccount, IndexedAgent } from '8004-solana';
@@ -140,62 +145,15 @@ export class SolanaChainProvider implements IChainProvider {
           indexerPaginated = true;
         }
 
-        // Apply client-side query filtering based on search mode
-        const mode = params.searchMode ?? 'all';
-        const nameQ = (params.nameQuery ?? params.query ?? '').toLowerCase();
-        const descQ = (params.descriptionQuery ?? '').toLowerCase();
-        const endpointQ = (params.endpointQuery ?? '').toLowerCase();
-        const generalQ = (params.query ?? '').toLowerCase();
-
-        if (nameQ || descQ || endpointQ || generalQ) {
-          results = results.filter(a => {
-            const name = (a.nft_name ?? '').toLowerCase();
-
-            // Name-specific search
-            if (mode === 'name' && nameQ) {
-              return name.includes(nameQ);
-            }
-
-            // Description search (would need metadata lookup - for now use name)
-            if (mode === 'description' && descQ) {
-              // TODO: Fetch metadata from indexer to search description
-              // For now, fall back to name search
-              return name.includes(descQ);
-            }
-
-            // Endpoint search (would need metadata lookup)
-            if (mode === 'endpoint' && endpointQ) {
-              // TODO: Fetch metadata from indexer to search endpoints
-              // For now, skip endpoint-only searches
-              return false;
-            }
-
-            // Search all fields (default)
-            if (mode === 'all') {
-              if (nameQ && name.includes(nameQ)) return true;
-              if (generalQ && name.includes(generalQ)) return true;
-              // If specific queries provided, require at least one match
-              if (nameQ || descQ || endpointQ) return false;
-              return true;
-            }
-
-            return true;
-          });
-        }
-
-        // Apply minQualityScore filter if specified
-        if (params.minQualityScore !== undefined) {
-          results = results.filter(a =>
-            (a.quality_score ?? 0) >= params.minQualityScore!
-          );
-        }
-
-        // Apply minTrustTier filter if specified
-        if (params.minTrustTier !== undefined) {
-          results = results.filter(a =>
-            (a.trust_tier ?? 0) >= params.minTrustTier!
-          );
-        }
+        // Apply client-side filtering using centralized helper
+        results = results.filter(a => {
+          // Map IndexedAgent to FilterableAgent format
+          const filterable = { name: a.nft_name };
+          if (!matchesSearchFilter(filterable, params)) return false;
+          if (!matchesQualityScore(a.quality_score, params.minQualityScore)) return false;
+          if (!matchesTrustTier(a.trust_tier, params.minTrustTier)) return false;
+          return true;
+        });
 
         // Only apply client-side pagination if indexer didn't paginate
         // (or if we had to filter results client-side)
