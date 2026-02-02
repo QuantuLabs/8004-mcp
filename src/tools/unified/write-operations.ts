@@ -15,7 +15,7 @@ import { globalState } from '../../state/global-state.js';
 import type { SolanaChainProvider } from '../../chains/solana/provider.js';
 import type { EVMChainProvider } from '../../chains/evm/provider.js';
 import { parseGlobalId, isValidGlobalId, type ChainPrefix } from '../../core/interfaces/agent.js';
-import { parseEvmAgentId, isChainId } from '../../core/utils/agent-id.js';
+import { parseEvmAgentId, isChainId, VALID_EVM_PREFIXES } from '../../core/utils/agent-id.js';
 
 export const writeOperationTools: Tool[] = [
   // Agent Transfer
@@ -352,7 +352,7 @@ export const writeOperationHandlers: Record<string, (args: unknown) => Promise<u
     if (firstPart === 'sol') {
       targetChain = 'sol';
       rawId = parseGlobalId(id).rawId;
-    } else if (isEvmNumericId || ['eth', 'base', 'arb', 'poly', 'op'].includes(firstPart)) {
+    } else if (isEvmNumericId || VALID_EVM_PREFIXES.includes(firstPart as any)) {
       // EVM ID - use parseEvmAgentId for proper handling
       const defaultProvider = globalState.chains.getDefault() as EVMChainProvider | null;
       const defaultChainId = defaultProvider ? parseInt(defaultProvider.chainId.split(':')[1] || '1', 10) : undefined;
@@ -672,7 +672,7 @@ export const writeOperationHandlers: Record<string, (args: unknown) => Promise<u
     let targetChain: ChainPrefix = (chainPrefix as ChainPrefix) || 'eth';
     let sdkId = id;
 
-    if (isChainId(firstPart) || ['eth', 'base', 'arb', 'poly', 'op'].includes(firstPart)) {
+    if (isChainId(firstPart) || VALID_EVM_PREFIXES.includes(firstPart as any)) {
       const provider = globalState.chains.getDefault() as EVMChainProvider | null;
       const defaultChainId = provider ? parseInt(provider.chainId.split(':')[1] || '1', 10) : undefined;
       const parsed = parseEvmAgentId(id, { prefix: chainPrefix as ChainPrefix | undefined, chainId: defaultChainId });
@@ -715,7 +715,7 @@ export const writeOperationHandlers: Record<string, (args: unknown) => Promise<u
     let targetChain: ChainPrefix = (chainPrefix as ChainPrefix) || 'eth';
     let sdkId = id;
 
-    if (isChainId(firstPart) || ['eth', 'base', 'arb', 'poly', 'op'].includes(firstPart)) {
+    if (isChainId(firstPart) || VALID_EVM_PREFIXES.includes(firstPart as any)) {
       const defaultProvider = globalState.chains.getDefault() as EVMChainProvider | null;
       const defaultChainId = defaultProvider ? parseInt(defaultProvider.chainId.split(':')[1] || '1', 10) : undefined;
       const parsed = parseEvmAgentId(id, { prefix: chainPrefix as ChainPrefix | undefined, chainId: defaultChainId });

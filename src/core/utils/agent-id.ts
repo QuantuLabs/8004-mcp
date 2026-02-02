@@ -37,6 +37,14 @@ export const PREFIX_TO_TESTNET_CHAIN_ID: Record<string, number> = {
   op: 11155420,
 };
 
+// Valid EVM chain prefixes (derived from PREFIX_TO_MAINNET_CHAIN_ID)
+export const VALID_EVM_PREFIXES = Object.keys(PREFIX_TO_MAINNET_CHAIN_ID) as ChainPrefix[];
+
+// Check if a string is a valid EVM prefix
+export function isValidEvmPrefix(str: string): str is ChainPrefix {
+  return VALID_EVM_PREFIXES.includes(str as ChainPrefix);
+}
+
 export interface ParsedEvmId {
   prefix: ChainPrefix;
   chainId: number;
@@ -63,8 +71,9 @@ export function parseEvmAgentId(
   // Single part: raw tokenId
   if (parts.length === 1) {
     const tokenId = parts[0]!;
-    const chainId = chainContext?.chainId;
-    const prefix = chainContext?.prefix || (chainId ? EVM_CHAIN_ID_MAP[chainId] : undefined);
+    // Derive chainId from context, falling back to prefix → mainnet chainId
+    const prefix = chainContext?.prefix || (chainContext?.chainId ? EVM_CHAIN_ID_MAP[chainContext.chainId] : undefined);
+    const chainId = chainContext?.chainId || (prefix ? PREFIX_TO_MAINNET_CHAIN_ID[prefix] : undefined);
 
     if (!prefix || !chainId) {
       throw new Error(
@@ -106,12 +115,16 @@ export function parseEvmAgentId(
       };
     }
 
-    // First part is prefix
-    const prefix = first as ChainPrefix;
+    // First part is prefix - validate and prioritize prefix's default chainId over context
+    if (!isValidEvmPrefix(first)) {
+      throw new Error(`Unknown EVM prefix: "${first}". Valid prefixes: ${VALID_EVM_PREFIXES.join(', ')}`);
+    }
+    const prefix = first;
     const tokenId = second;
-    const chainId = chainContext?.chainId ||
-      (chainContext?.prefix === prefix ? chainContext.chainId : undefined) ||
-      PREFIX_TO_MAINNET_CHAIN_ID[prefix];
+    // Only use context chainId if it matches the prefix, otherwise use prefix default
+    const chainId = (chainContext?.prefix === prefix && chainContext?.chainId)
+      ? chainContext.chainId
+      : PREFIX_TO_MAINNET_CHAIN_ID[prefix];
 
     if (!chainId) {
       throw new Error(`Cannot determine chainId for prefix "${prefix}"`);
@@ -126,11 +139,15 @@ export function parseEvmAgentId(
     };
   }
 
-  // Three or more parts: "prefix:chainId:tokenId" or malformed
-  if (parts.length >= 3) {
-    const prefix = parts[0]! as ChainPrefix;
+  // Three parts: "prefix:chainId:tokenId"
+  if (parts.length === 3) {
+    const prefixStr = parts[0]!;
+    if (!isValidEvmPrefix(prefixStr)) {
+      throw new Error(`Unknown EVM prefix: "${prefixStr}". Valid prefixes: ${VALID_EVM_PREFIXES.join(', ')}`);
+    }
+    const prefix = prefixStr;
     const chainId = parseInt(parts[1]!, 10);
-    const tokenId = parts[parts.length - 1]!;
+    const tokenId = parts[2]!;
 
     if (isNaN(chainId)) {
       throw new Error(`Invalid chainId in ID: ${id}`);
@@ -143,6 +160,11 @@ export function parseEvmAgentId(
       globalId: `${prefix}:${chainId}:${tokenId}`,
       sdkId: `${chainId}:${tokenId}`,
     };
+  }
+
+  // More than 3 parts: malformed
+  if (parts.length > 3) {
+    throw new Error(`Malformed agent ID with ${parts.length} parts: "${id}". Expected format: "prefix:chainId:tokenId"`);
   }
 
   throw new Error(`Invalid agent ID format: ${id}`);

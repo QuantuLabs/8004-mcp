@@ -11,7 +11,7 @@ import {
 import { successResponse } from '../../core/serializers/common.js';
 import { globalState } from '../../state/global-state.js';
 import { parseGlobalId, type ChainPrefix } from '../../core/interfaces/agent.js';
-import { parseEvmAgentId, isChainId } from '../../core/utils/agent-id.js';
+import { parseEvmAgentId, isChainId, VALID_EVM_PREFIXES } from '../../core/utils/agent-id.js';
 import type { EVMChainProvider } from '../../chains/evm/provider.js';
 
 export const reputationTools: Tool[] = [
@@ -80,7 +80,7 @@ export const reputationHandlers: Record<string, (args: unknown) => Promise<unkno
       const parsed = parseGlobalId(agentId);
       provider = globalState.chains.getByPrefix('sol');
       rawId = parsed.rawId;
-    } else if (isChainId(firstPart) || ['eth', 'base', 'arb', 'poly', 'op'].includes(firstPart)) {
+    } else if (isChainId(firstPart) || VALID_EVM_PREFIXES.includes(firstPart as any)) {
       // EVM ID in any format
       const defaultProvider = globalState.chains.getDefault() as EVMChainProvider | null;
       const defaultChainId = defaultProvider ? parseInt(defaultProvider.chainId.split(':')[1] || '1', 10) : undefined;

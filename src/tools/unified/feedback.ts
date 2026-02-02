@@ -16,7 +16,7 @@ import { parseGlobalId, isValidGlobalId, type ChainPrefix } from '../../core/int
 import type { IWritableChainProvider } from '../../core/interfaces/chain-provider.js';
 import { isWritableProvider } from '../../core/interfaces/chain-provider.js';
 import { encodeReputationValue } from '../../core/utils/value-encoding.js';
-import { parseEvmAgentId, isChainId } from '../../core/utils/agent-id.js';
+import { parseEvmAgentId, isChainId, VALID_EVM_PREFIXES } from '../../core/utils/agent-id.js';
 import type { EVMChainProvider } from '../../chains/evm/provider.js';
 
 export const feedbackTools: Tool[] = [
@@ -175,7 +175,7 @@ export const feedbackHandlers: Record<string, (args: unknown) => Promise<unknown
       const parsed = parseGlobalId(agentId);
       provider = globalState.chains.getByPrefix('sol');
       rawId = parsed.rawId;
-    } else if (isChainId(firstPart) || ['eth', 'base', 'arb', 'poly', 'op'].includes(firstPart)) {
+    } else if (isChainId(firstPart) || VALID_EVM_PREFIXES.includes(firstPart as any)) {
       // EVM ID: chainId:tokenId, prefix:tokenId, or prefix:chainId:tokenId
       const defaultProvider = globalState.chains.getDefault() as EVMChainProvider | null;
       const defaultChainId = defaultProvider ? parseInt(defaultProvider.chainId.split(':')[1] || '1', 10) : undefined;
