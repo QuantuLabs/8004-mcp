@@ -374,9 +374,16 @@ async function estimateEvmCost(chainPrefix: string): Promise<unknown> {
   // Get current gas price
   const gasPrice = await publicClient.getGasPrice();
 
-  // Estimated gas for agent registration (NFT mint + storage)
-  // Based on typical agent0-sdk registration: ~250k-350k gas
-  const estimatedGas = BigInt(300000);
+  // ERC-8004 IdentityRegistryUpgradeable.register() gas breakdown:
+  // - _lastId++ (SSTORE cold): 20,000 gas
+  // - agentWallet metadata (SSTORE cold): 20,000 gas
+  // - _balances[to] (SSTORE cold): 20,000 gas
+  // - _owners[tokenId] (SSTORE cold): 20,000 gas
+  // - _tokenURIs[tokenId] (SSTORE cold): 20,000 gas
+  // - Function overhead, events, checks: ~35,000 gas
+  // Total: ~135,000 gas (base registration)
+  // With IPFS upload via SDK: may add ~15,000 gas for longer tokenURI
+  const estimatedGas = BigInt(150000);
 
   // Calculate cost
   const gasCostWei = gasPrice * estimatedGas;
@@ -401,7 +408,11 @@ async function estimateEvmCost(chainPrefix: string): Promise<unknown> {
       },
       estimatedGas: {
         units: estimatedGas.toString(),
-        description: 'Estimated gas units for registration (~300k)',
+        description: 'Estimated gas: 5 cold SSTORE (~100k) + overhead (~50k)',
+      },
+      storageWrites: {
+        count: 5,
+        description: '_lastId, agentWallet, _balances, _owners, _tokenURIs',
       },
       gasCost: {
         wei: gasCostWei.toString(),

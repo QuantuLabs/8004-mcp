@@ -220,11 +220,12 @@ const evmEstimate = await client.callTool({ name: 'agent_register', arguments: {
 //   chainId: 84532,
 //   breakdown: {
 //     gasPrice: { wei: '1000000000', gwei: 1 },
-//     estimatedGas: { units: '300000' },
-//     gasCost: { wei: '300000000000000', eth: 0.0003 }
+//     estimatedGas: { units: '150000', description: '5 cold SSTORE + overhead' },
+//     storageWrites: { count: 5, description: '_lastId, agentWallet, _balances, _owners, _tokenURIs' },
+//     gasCost: { wei: '150000000000000', eth: 0.00015 }
 //   },
-//   total: { wei: '300000000000000', eth: 0.0003 },
-//   recommended: { wei: '390000000000000', eth: 0.00039, description: '30% buffer' }
+//   total: { wei: '150000000000000', eth: 0.00015 },
+//   recommended: { wei: '195000000000000', eth: 0.000195, description: '30% buffer' }
 // }
 ```
 
