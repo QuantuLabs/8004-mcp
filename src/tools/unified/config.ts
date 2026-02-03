@@ -342,11 +342,35 @@ export const configHandlers: Record<string, (args: unknown) => Promise<unknown>>
     const networkStatus = globalState.getNetworkStatus();
 
     if (networkStatus.mode === 'mainnet') {
+      // Get wallet address for mainnet funding request
+      const walletStore = getWalletStore();
+      let walletAddress: string | undefined;
+      try {
+        if (walletStore.isUnlocked()) {
+          const wallets = walletStore.listWallets();
+          const chainType = chain === 'sol' ? 'solana' : 'evm';
+          const wallet = wallets.find(w => w.chainType === chainType);
+          walletAddress = wallet?.address;
+        }
+      } catch { /* ignore */ }
+
+      const ownerMessage = walletAddress
+        ? `Please fund my mainnet wallet:\n` +
+          `Chain: ${chain.toUpperCase()}\n` +
+          `Address: ${walletAddress}\n` +
+          `Note: This requires real funds (not testnet)`
+        : null;
+
       return successResponse({
         chain,
         network: 'mainnet',
-        message: 'Mainnet mode - no faucets available. Use real funds.',
+        message: 'Mainnet mode - no faucets available. Ask your owner to fund your wallet with real funds.',
         warning: 'Registration on mainnet costs real money!',
+        walletAddress: walletAddress || 'No wallet created yet',
+        askOwnerToFund: ownerMessage,
+        nextSteps: walletAddress
+          ? ['1. Send the funding request message to your owner', '2. Wait for real funds', '3. Ready for agent_register!']
+          : [`1. Create wallet: wallet_create({ name: "my-wallet", chainType: "${chain === 'sol' ? 'solana' : 'evm'}" })`, '2. Run faucet_info again'],
       });
     }
 
@@ -435,17 +459,31 @@ export const configHandlers: Record<string, (args: unknown) => Promise<unknown>>
       walletAddress = wallet?.address;
     }
 
+    // Build message for owner
+    const ownerMessage = walletAddress
+      ? `Please fund my ${info.name} wallet:\n` +
+        `Address: ${walletAddress}\n` +
+        `Minimum needed: ${info.minimumForRegistration}\n` +
+        `Explorer: ${info.explorerUrl}/address/${walletAddress}`
+      : null;
+
     return successResponse({
       chain,
       ...info,
       walletAddress: walletAddress || 'No wallet created yet - run wallet_create first',
-      nextSteps: [
-        walletAddress ? `1. Copy your address: ${walletAddress}` : '1. Create wallet: wallet_create({ name: "my-wallet", chainType: "' + (chain === 'sol' ? 'solana' : 'evm') + '" })',
-        '2. Visit a faucet URL above',
-        '3. Request testnet tokens',
-        '4. Check balance on explorer',
-        '5. Ready for agent_register!',
-      ],
+      agentNote: 'Most faucets require human interaction (captchas, account creation). Ask your owner to fund your wallet.',
+      askOwnerToFund: ownerMessage,
+      nextSteps: walletAddress
+        ? [
+            '1. Ask your owner to fund your wallet (message below)',
+            '2. Or try a faucet if available (may require captcha)',
+            '3. Wait for funds to arrive',
+            '4. Ready for agent_register!',
+          ]
+        : [
+            `1. Create wallet: wallet_create({ name: "my-wallet", chainType: "${chain === 'sol' ? 'solana' : 'evm'}" })`,
+            '2. Run faucet_info again to get funding instructions',
+          ],
     });
   },
 };
