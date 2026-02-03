@@ -268,47 +268,58 @@ export const configHandlers: Record<string, (args: unknown) => Promise<unknown>>
 
   health_check: async () => {
     const walletStore = getWalletStore();
-    const networkStatus = globalState.getNetworkStatus();
+
+    // Get network status safely
+    let networkStatus: { mode: string; deployedChains: string[] };
+    try {
+      networkStatus = globalState.getNetworkStatus();
+    } catch {
+      networkStatus = { mode: 'unknown', deployedChains: [] };
+    }
 
     // Check each chain's RPC connectivity
     const chainHealth: Record<string, { status: string; latency?: number; error?: string }> = {};
 
     for (const prefix of networkStatus.deployedChains) {
-      const provider = globalState.chains.getByPrefix(prefix as 'sol' | 'eth' | 'base' | 'arb' | 'poly' | 'op');
-      if (provider) {
-        try {
+      try {
+        const provider = globalState.chains.getByPrefix(prefix as 'sol' | 'eth' | 'base' | 'arb' | 'poly' | 'op');
+        if (provider) {
           const start = Date.now();
-          // Try a simple operation to test connectivity
-          if (provider.chainType === 'solana') {
-            // For Solana, just mark as available if provider exists
-            chainHealth[prefix] = { status: 'ok', latency: Date.now() - start };
-          } else {
-            // For EVM, provider existence is enough for basic health
-            chainHealth[prefix] = { status: 'ok', latency: Date.now() - start };
-          }
-        } catch (err) {
-          chainHealth[prefix] = {
-            status: 'error',
-            error: err instanceof Error ? err.message : 'Unknown error'
-          };
+          chainHealth[prefix] = { status: 'ok', latency: Date.now() - start };
+        } else {
+          chainHealth[prefix] = { status: 'not_initialized' };
         }
-      } else {
-        chainHealth[prefix] = { status: 'not_initialized' };
+      } catch (err) {
+        chainHealth[prefix] = {
+          status: 'error',
+          error: err instanceof Error ? err.message : 'Unknown error'
+        };
       }
     }
 
     // Wallet store status
     let walletStoreStatus: string;
-    if (!walletStore.isInitialized()) {
-      walletStoreStatus = 'not_initialized';
-    } else if (walletStore.isUnlocked()) {
-      walletStoreStatus = 'unlocked';
-    } else {
-      walletStoreStatus = 'locked';
+    try {
+      if (!walletStore.isInitialized()) {
+        walletStoreStatus = 'not_initialized';
+      } else if (walletStore.isUnlocked()) {
+        walletStoreStatus = 'unlocked';
+      } else {
+        walletStoreStatus = 'locked';
+      }
+    } catch {
+      walletStoreStatus = 'error';
     }
 
-    // Cache stats - simplified
-    const cacheStats = globalState.cache ? 'available' : 'not_initialized';
+    // Cache stats - simplified (may not be initialized yet)
+    let cacheStats = 'not_initialized';
+    try {
+      if (globalState.cache) {
+        cacheStats = 'available';
+      }
+    } catch {
+      // Cache not initialized - that's OK
+    }
 
     return successResponse({
       server: 'ok',
