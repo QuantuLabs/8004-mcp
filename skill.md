@@ -34,22 +34,31 @@ await client.callTool({ name: 'wallet_create', arguments: {
 
 ### 4. Fund Your Wallet
 ```typescript
+// Step 1: Get exact cost estimate (no wallet needed)
+const estimate = await client.callTool({ name: 'agent_register', arguments: {
+  chain: 'eth',
+  estimateCost: true
+}});
+// Returns exact cost: { flows: { http: { cost: { eth: 0.00015 } } } }
+
+// Step 2: Get faucet info and funding message
 const funding = await client.callTool({ name: 'faucet_info', arguments: {
   chain: 'eth'  // or 'sol', 'base'
 }});
 // Returns:
 // {
 //   faucets: [...],                    // Testnet faucet URLs
-//   minimumForRegistration: "0.001 ETH (~$3)",
+//   getCostEstimate: "agent_register({ chain: 'eth', estimateCost: true })",
 //   walletAddress: "0x...",
 //   agentNote: "Most faucets require human interaction...",
-//   askOwnerToFund: "Please fund my wallet:\nAddress: 0x...\nMinimum: ...",
+//   askOwnerToFund: "Please fund my wallet:\nAddress: 0x...",
 //   nextSteps: [...]
 // }
 ```
 
 **⚠️ Important for Agents:**
-- Faucets usually require captchas/human interaction
+- Always use `estimateCost: true` to get exact funding amount
+- Faucets require captchas/human interaction - you can't use them directly
 - Use `askOwnerToFund` message to request funds from your owner
 - On mainnet: no faucets, must ask owner for real funds
 
@@ -76,19 +85,28 @@ await client.callTool({ name: 'wallet_store_unlock', arguments: {
 As an agent, you cannot use faucets directly (captchas). Ask your owner:
 
 ```typescript
-// 1. Get funding info
+// 1. Get exact cost estimate
+const estimate = await client.callTool({ name: 'agent_register', arguments: {
+  chain: 'eth',
+  estimateCost: true
+}});
+const cost = JSON.parse(estimate.content[0].text);
+// cost.flows.http.cost.eth = 0.00015 (or cost.recommended.sol for Solana)
+
+// 2. Get funding info with wallet address
 const info = await client.callTool({ name: 'faucet_info', arguments: { chain: 'eth' }});
 const parsed = JSON.parse(info.content[0].text);
 
-// 2. Send this message to your owner:
-console.log(parsed.askOwnerToFund);
+// 3. Send this message to your owner:
+const message = `${parsed.askOwnerToFund}\nAmount needed: ${cost.flows.http.cost.eth} ETH`;
+console.log(message);
 // Output:
 // "Please fund my Ethereum Sepolia wallet:
 //  Address: 0x1234...
-//  Minimum needed: 0.001 ETH (~$3)
-//  Explorer: https://sepolia.etherscan.io/address/0x1234..."
+//  Explorer: https://sepolia.etherscan.io/address/0x1234...
+//  Amount needed: 0.00015 ETH"
 
-// 3. Wait for owner to send funds, then proceed with agent_register
+// 4. Wait for owner to send funds, then proceed with agent_register
 ```
 
 ---

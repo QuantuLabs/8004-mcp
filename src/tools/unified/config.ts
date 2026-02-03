@@ -378,7 +378,6 @@ export const configHandlers: Record<string, (args: unknown) => Promise<unknown>>
       name: string;
       chainId: number;
       faucets: { name: string; url: string; note: string }[];
-      minimumForRegistration: string;
       explorerUrl: string;
     }> = {
       sol: {
@@ -388,7 +387,6 @@ export const configHandlers: Record<string, (args: unknown) => Promise<unknown>>
           { name: 'Solana CLI', url: 'solana airdrop 2 --url devnet', note: '2 SOL per request' },
           { name: 'SolFaucet', url: 'https://solfaucet.com/', note: 'Web faucet' },
         ],
-        minimumForRegistration: '0.01 SOL (~$1.50)',
         explorerUrl: 'https://explorer.solana.com/?cluster=devnet',
       },
       eth: {
@@ -399,7 +397,6 @@ export const configHandlers: Record<string, (args: unknown) => Promise<unknown>>
           { name: 'Sepolia PoW Faucet', url: 'https://sepolia-faucet.pk910.de/', note: 'Mining-based, no limits' },
           { name: 'QuickNode Faucet', url: 'https://faucet.quicknode.com/ethereum/sepolia', note: 'Requires QuickNode account' },
         ],
-        minimumForRegistration: '0.001 ETH (~$3)',
         explorerUrl: 'https://sepolia.etherscan.io',
       },
       base: {
@@ -409,7 +406,6 @@ export const configHandlers: Record<string, (args: unknown) => Promise<unknown>>
           { name: 'Alchemy Faucet', url: 'https://www.alchemy.com/faucets/base-sepolia', note: 'Requires account' },
           { name: 'Coinbase Faucet', url: 'https://portal.cdp.coinbase.com/products/faucet', note: 'Requires Coinbase account' },
         ],
-        minimumForRegistration: '0.0001 ETH (~$0.30)',
         explorerUrl: 'https://sepolia.basescan.org',
       },
       arb: {
@@ -419,7 +415,6 @@ export const configHandlers: Record<string, (args: unknown) => Promise<unknown>>
           { name: 'Alchemy Faucet', url: 'https://www.alchemy.com/faucets/arbitrum-sepolia', note: 'Requires account' },
           { name: 'Triangle Faucet', url: 'https://faucet.triangleplatform.com/arbitrum/sepolia', note: 'Free' },
         ],
-        minimumForRegistration: '0.0001 ETH (~$0.30)',
         explorerUrl: 'https://sepolia.arbiscan.io',
       },
       poly: {
@@ -429,7 +424,6 @@ export const configHandlers: Record<string, (args: unknown) => Promise<unknown>>
           { name: 'Polygon Faucet', url: 'https://faucet.polygon.technology/', note: 'Official faucet' },
           { name: 'Alchemy Faucet', url: 'https://www.alchemy.com/faucets/polygon-amoy', note: 'Requires account' },
         ],
-        minimumForRegistration: '0.1 MATIC (~$0.05)',
         explorerUrl: 'https://amoy.polygonscan.com',
       },
       op: {
@@ -439,7 +433,6 @@ export const configHandlers: Record<string, (args: unknown) => Promise<unknown>>
           { name: 'Superchain Faucet', url: 'https://app.optimism.io/faucet', note: 'Official OP faucet' },
           { name: 'Alchemy Faucet', url: 'https://www.alchemy.com/faucets/optimism-sepolia', note: 'Requires account' },
         ],
-        minimumForRegistration: '0.0001 ETH (~$0.30)',
         explorerUrl: 'https://sepolia-optimism.etherscan.io',
       },
     };
@@ -459,26 +452,28 @@ export const configHandlers: Record<string, (args: unknown) => Promise<unknown>>
       walletAddress = wallet?.address;
     }
 
-    // Build message for owner
+    // Build message for owner (without hardcoded amount - agent should use estimateCost)
     const ownerMessage = walletAddress
       ? `Please fund my ${info.name} wallet:\n` +
         `Address: ${walletAddress}\n` +
-        `Minimum needed: ${info.minimumForRegistration}\n` +
-        `Explorer: ${info.explorerUrl}/address/${walletAddress}`
+        `Explorer: ${info.explorerUrl}/address/${walletAddress}\n` +
+        `(Run agent_register with estimateCost:true to get exact amount needed)`
       : null;
 
     return successResponse({
       chain,
       ...info,
       walletAddress: walletAddress || 'No wallet created yet - run wallet_create first',
+      getCostEstimate: `agent_register({ chain: "${chain}", estimateCost: true })`,
       agentNote: 'Most faucets require human interaction (captchas, account creation). Ask your owner to fund your wallet.',
       askOwnerToFund: ownerMessage,
       nextSteps: walletAddress
         ? [
-            '1. Ask your owner to fund your wallet (message below)',
-            '2. Or try a faucet if available (may require captcha)',
-            '3. Wait for funds to arrive',
-            '4. Ready for agent_register!',
+            `1. Get exact cost: agent_register({ chain: "${chain}", estimateCost: true })`,
+            '2. Ask your owner to fund your wallet with the estimated amount',
+            '3. Or try a faucet if available (may require captcha)',
+            '4. Wait for funds to arrive',
+            '5. Ready for agent_register!',
           ]
         : [
             `1. Create wallet: wallet_create({ name: "my-wallet", chainType: "${chain === 'sol' ? 'solana' : 'evm'}" })`,
