@@ -268,40 +268,35 @@ await client.callTool({ name: 'agent_register', arguments: {
 
 ---
 
-## Approximate Costs
+## Registration Costs (Verified on Testnet)
 
-### Solana (Devnet/Mainnet)
+### Solana Devnet
 
-| Operation | Cost | Notes |
-|-----------|------|-------|
-| `agent_register` | ~0.01 SOL | Includes ATOM stats account |
-| `feedback_give` | ~0.0005 SOL | Event-based, low rent |
-| `feedback_response_append` | ~0.0005 SOL | Event-based |
-| `agent_uri_update` | ~0.00005 SOL | Tx fee only |
+| Component | Cost |
+|-----------|------|
+| AgentAccount PDA (297 bytes) | 0.00207 SOL |
+| Metaplex Core NFT (~268 bytes) | 0.00187 SOL |
+| AtomStats reputation (561 bytes) | 0.00391 SOL |
+| Transaction fees | 0.00001 SOL |
+| **Total** | **0.00786 SOL** |
+| **Recommended (with 20% buffer)** | **0.0095 SOL** |
 
-### EVM - L2 Chains (Base, Arbitrum, Optimism)
+### Ethereum Sepolia (@ ~1 gwei)
 
-**Recommended for lowest costs.**
+| Flow | Gas | Cost |
+|------|-----|------|
+| HTTP (tokenUri already hosted) | 150,000 | 0.00017 ETH (~$0.50) |
+| IPFS (SDK uploads then sets URI) | 200,000 | 0.00022 ETH (~$0.66) |
 
-| Operation | Gas | Typical Cost |
-|-----------|-----|--------------|
-| `agent_register` | 150-200k | $0.01-0.50 |
-| `feedback_give` | 100k | $0.01-0.30 |
-| `feedback_response_append` | 60k | $0.01-0.20 |
-| `agent_uri_update` | 50k | $0.01-0.15 |
+**Note:** Mainnet gas prices vary widely (10-100+ gwei). Costs scale linearly.
 
-### EVM - Ethereum Mainnet
+### Other Operations (Approximate)
 
-**High variability - gas spikes during congestion.**
-
-| Operation | Gas | Cost (25-100 gwei) |
-|-----------|-----|--------------------|
-| `agent_register` | 150-200k | $10-60 |
-| `feedback_give` | 100k | $7-30 |
-| `feedback_response_append` | 60k | $4-18 |
-| `agent_uri_update` | 50k | $3-15 |
-
-**Tip:** Use L2 chains (Base, Arbitrum) for 10-100x lower costs than Ethereum mainnet.
+| Operation | Solana | EVM (150k gas) |
+|-----------|--------|----------------|
+| `feedback_give` | ~0.0005 SOL | ~0.0001 ETH |
+| `feedback_response_append` | ~0.0005 SOL | ~0.00006 ETH |
+| `agent_uri_update` | ~0.00005 SOL | ~0.00005 ETH |
 
 ---
 
