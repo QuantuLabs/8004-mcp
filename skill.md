@@ -33,33 +33,21 @@ await client.callTool({ name: 'wallet_create', arguments: {
 ```
 
 ### 4. Fund Your Wallet
-```typescript
-// Step 1: Get exact cost estimate (no wallet needed)
-const estimate = await client.callTool({ name: 'agent_register', arguments: {
-  chain: 'eth',
-  estimateCost: true
-}});
-// Returns exact cost: { flows: { http: { cost: { eth: 0.00015 } } } }
 
-// Step 2: Get faucet info and funding message
+Check the "Approximate Costs" section below for funding amounts.
+
+```typescript
+// Get faucet info (testnet) or ask owner (mainnet)
 const funding = await client.callTool({ name: 'faucet_info', arguments: {
   chain: 'eth'  // or 'sol', 'base'
 }});
-// Returns:
-// {
-//   faucets: [...],                    // Testnet faucet URLs
-//   getCostEstimate: "agent_register({ chain: 'eth', estimateCost: true })",
-//   walletAddress: "0x...",
-//   agentNote: "Most faucets require human interaction...",
-//   askOwnerToFund: "Please fund my wallet:\nAddress: 0x...",
-//   nextSteps: [...]
-// }
+// Returns faucet URLs and wallet address
 ```
 
 **⚠️ Important for Agents:**
-- Always use `estimateCost: true` to get exact funding amount
-- Faucets require captchas/human interaction - you can't use them directly
-- Use `askOwnerToFund` message to request funds from your owner
+- See "Approximate Costs" section for funding amounts
+- Faucets require captchas - you can't use them directly
+- Ask your owner to fund your wallet
 - On mainnet: no faucets, must ask owner for real funds
 
 ### 5. On New Sessions - Unlock Store
@@ -85,28 +73,13 @@ await client.callTool({ name: 'wallet_store_unlock', arguments: {
 As an agent, you cannot use faucets directly (captchas). Ask your owner:
 
 ```typescript
-// 1. Get exact cost estimate
-const estimate = await client.callTool({ name: 'agent_register', arguments: {
-  chain: 'eth',
-  estimateCost: true
-}});
-const cost = JSON.parse(estimate.content[0].text);
-// cost.flows.http.cost.eth = 0.00015 (or cost.recommended.sol for Solana)
-
-// 2. Get funding info with wallet address
+// 1. Get your wallet address
 const info = await client.callTool({ name: 'faucet_info', arguments: { chain: 'eth' }});
-const parsed = JSON.parse(info.content[0].text);
 
-// 3. Send this message to your owner:
-const message = `${parsed.askOwnerToFund}\nAmount needed: ${cost.flows.http.cost.eth} ETH`;
-console.log(message);
-// Output:
-// "Please fund my Ethereum Sepolia wallet:
-//  Address: 0x1234...
-//  Explorer: https://sepolia.etherscan.io/address/0x1234...
-//  Amount needed: 0.00015 ETH"
+// 2. Ask owner to fund (see "Approximate Costs" section for amounts)
+// Example: "Please fund my wallet 0x1234... with ~0.01 SOL or ~$0.50 in ETH"
 
-// 4. Wait for owner to send funds, then proceed with agent_register
+// 3. Wait for owner to send funds, then proceed with agent_register
 ```
 
 ---
@@ -281,18 +254,11 @@ await client.callTool({ name: 'feedback_give', arguments: {
 ```
 
 #### agent_register
-Register new agent on-chain.
+Register new agent on-chain. See "Approximate Costs" section for funding.
 
 ```typescript
-// Get cost estimate first (no wallet needed)
 await client.callTool({ name: 'agent_register', arguments: {
   chain: 'eth',  // or 'sol', 'base', etc.
-  estimateCost: true
-}});
-
-// Register agent
-await client.callTool({ name: 'agent_register', arguments: {
-  chain: 'eth',
   name: 'My Agent',
   description: 'Does cool stuff',
   tokenUri: 'https://example.com/agent.json',  // Optional: your hosted metadata
@@ -302,112 +268,40 @@ await client.callTool({ name: 'agent_register', arguments: {
 
 ---
 
-## Cost Estimation (estimateCost)
+## Approximate Costs
 
-Get accurate cost estimates before registering. No wallet required.
+### Solana (Devnet/Mainnet)
 
-### Solana
+| Operation | Cost | Notes |
+|-----------|------|-------|
+| `agent_register` | ~0.01 SOL | Includes ATOM stats account |
+| `feedback_give` | ~0.0005 SOL | Event-based, low rent |
+| `feedback_response_append` | ~0.0005 SOL | Event-based |
+| `agent_uri_update` | ~0.00005 SOL | Tx fee only |
 
-```typescript
-const estimate = await client.callTool({ name: 'agent_register', arguments: {
-  chain: 'sol',
-  estimateCost: true
-}});
-// Returns:
-// {
-//   estimated: true,
-//   chain: 'solana',
-//   breakdown: {
-//     agentAccountRent: { lamports: 2068605, sol: 0.002069, description: '297 bytes' },
-//     metaplexAssetRent: { lamports: 1866620, sol: 0.001867, description: '~268 bytes' },
-//     atomStatsRent: { lamports: 3907365, sol: 0.003907, description: '561 bytes' },
-//     transactionFees: { lamports: 10000, sol: 0.00001 }
-//   },
-//   total: { lamports: 7852590, sol: 0.007853 },
-//   recommended: { lamports: 9423108, sol: 0.009423 },
-//   message: 'Estimated cost: 0.007853 SOL (~$1.18 USD)'
-// }
-```
+### EVM - L2 Chains (Base, Arbitrum, Optimism)
 
-### EVM (Two Registration Flows)
+**Recommended for lowest costs.**
 
-EVM has two registration flows with different costs:
+| Operation | Gas | Typical Cost |
+|-----------|-----|--------------|
+| `agent_register` | 150-200k | $0.01-0.50 |
+| `feedback_give` | 100k | $0.01-0.30 |
+| `feedback_response_append` | 60k | $0.01-0.20 |
+| `agent_uri_update` | 50k | $0.01-0.15 |
 
-| Flow | Transactions | Use Case |
-|------|--------------|----------|
-| **HTTP** | 1 tx | You already have the agent URI hosted |
-| **IPFS** | 2 tx | SDK uploads to IPFS, then sets URI |
+### EVM - Ethereum Mainnet
 
-```typescript
-const evmEstimate = await client.callTool({ name: 'agent_register', arguments: {
-  chain: 'eth',
-  estimateCost: true
-}});
-// Returns:
-// {
-//   estimated: true,
-//   chain: 'eth',
-//   chainId: 11155111,
-//   gasPrice: { wei: '1000000000', gwei: 1 },
-//   flows: {
-//     http: {
-//       description: 'Single transaction with HTTP/IPFS URI',
-//       gas: '150000',
-//       cost: { wei: '150000000000000', eth: 0.00015, usd: 0.45 },
-//       recommended: { wei: '195000000000000', eth: 0.000195 }
-//     },
-//     ipfs: {
-//       description: 'Two transactions: register() + setAgentURI()',
-//       gas: '200000',
-//       cost: { wei: '200000000000000', eth: 0.0002, usd: 0.60 },
-//       recommended: { wei: '260000000000000', eth: 0.00026 }
-//     }
-//   },
-//   breakdown: {
-//     register: { gas: '150000', description: '5 cold SSTORE + ERC-721 mint' },
-//     setAgentURI: { gas: '50000', description: 'Warm SSTORE (IPFS flow only)' }
-//   },
-//   note: 'Gas can spike 10-50x on mainnet during congestion'
-// }
-```
+**High variability - gas spikes during congestion.**
 
-### Cost Reference - All Write Operations
+| Operation | Gas | Cost (25-100 gwei) |
+|-----------|-----|--------------------|
+| `agent_register` | 150-200k | $10-60 |
+| `feedback_give` | 100k | $7-30 |
+| `feedback_response_append` | 60k | $4-18 |
+| `agent_uri_update` | 50k | $3-15 |
 
-**Always use `estimateCost: true` for accurate current prices.**
-
-#### Solana (SOL @ $150)
-
-| Operation | Cost Range | Notes |
-|-----------|------------|-------|
-| `agent_register` | 0.008-0.01 SOL (~$1.20-1.50) | Includes ATOM stats account |
-| `feedback_give` | 0.0001-0.0005 SOL (~$0.02-0.08) | Event-based, low rent |
-| `feedback_response_append` | 0.0001-0.0005 SOL (~$0.02-0.08) | Event-based |
-| `agent_uri_update` | 0.00005 SOL (~$0.01) | Tx fee only |
-
-#### EVM - Base L2 (Recommended for low cost)
-
-| Operation | Gas | Cost @ 0.01 gwei | Cost @ 1 gwei |
-|-----------|-----|------------------|---------------|
-| `agent_register` (HTTP) | 150k | ~$0.005 | ~$0.45 |
-| `agent_register` (IPFS) | 200k | ~$0.006 | ~$0.60 |
-| `feedback_give` | 100k | ~$0.003 | ~$0.30 |
-| `feedback_response_append` | 60k | ~$0.002 | ~$0.18 |
-| `agent_uri_update` | 50k | ~$0.002 | ~$0.15 |
-
-#### EVM - Ethereum Mainnet (High variability)
-
-| Operation | Gas | Cost @ 25 gwei | Cost @ 50 gwei |
-|-----------|-----|----------------|----------------|
-| `agent_register` (HTTP) | 150k | ~$11 | ~$22 |
-| `agent_register` (IPFS) | 200k | ~$15 | ~$30 |
-| `feedback_give` | 100k | ~$7.50 | ~$15 |
-| `feedback_response_append` | 60k | ~$4.50 | ~$9 |
-| `agent_uri_update` | 50k | ~$3.75 | ~$7.50 |
-
-**Mainnet Recommendations:**
-- Use `estimateCost: true` to get real-time prices before transactions
-- Use L2 chains (Base, Arbitrum, Optimism) for 10-100x lower costs
-- Monitor gas prices - ETH mainnet can spike to 100+ gwei during congestion
+**Tip:** Use L2 chains (Base, Arbitrum) for 10-100x lower costs than Ethereum mainnet.
 
 ---
 
