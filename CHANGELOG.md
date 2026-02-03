@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.2.3] - 2026-02-03
+
+### Added
+- `estimateCost` option for `agent_register` - get accurate cost estimates before transactions
+- Solana cost breakdown: AgentAccount rent, Metaplex NFT rent, AtomStats rent, tx fees
+- EVM cost breakdown: HTTP flow (1 tx) vs IPFS flow (2 tx) with gas estimates
+
+### Fixed
+- Binary image uploads in `ipfs_add_image` - Buffer to Uint8Array conversion for native fetch
+- Image magic bytes now correctly preserved (PNG, JPEG, GIF, WebP)
+
+### Changed
+- Removed external dependencies (got, form-data) - now uses native Node.js fetch
+- Simplified cost documentation in skill.md
+
 ## [0.2.2] - 2026-02-01
 
 ### Security
