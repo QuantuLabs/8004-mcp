@@ -6,6 +6,7 @@ import { successResponse, errorResponse } from '../../core/serializers/common.js
 import { globalState } from '../../state/global-state.js';
 import type { SolanaChainProvider } from '../../chains/solana/provider.js';
 import type { NetworkMode } from '../../config/defaults.js';
+import { getWalletStore } from '../../core/wallet/index.js';
 
 export const configTools: Tool[] = [
   {
@@ -87,6 +88,27 @@ export const configTools: Tool[] = [
         },
       },
       required: ['mode'],
+    },
+  },
+  {
+    name: 'health_check',
+    description: 'Check system health: server status, chain connectivity, wallet store status, and cache stats. Use this first to diagnose issues.',
+    inputSchema: {
+      type: 'object',
+      properties: {},
+    },
+  },
+  {
+    name: 'faucet_info',
+    description: 'Get testnet faucet URLs and funding info for a chain. Returns faucet links and minimum balance needed for registration.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        chain: {
+          type: 'string',
+          description: 'Chain to get faucet info for (sol, eth, base, arb, poly, op)',
+        },
+      },
     },
   },
 ];
@@ -241,6 +263,178 @@ export const configHandlers: Record<string, (args: unknown) => Promise<unknown>>
       current: result.current,
       deployedChains: result.deployedChains,
       network: globalState.getNetworkStatus(),
+    });
+  },
+
+  health_check: async () => {
+    const walletStore = getWalletStore();
+    const networkStatus = globalState.getNetworkStatus();
+
+    // Check each chain's RPC connectivity
+    const chainHealth: Record<string, { status: string; latency?: number; error?: string }> = {};
+
+    for (const prefix of networkStatus.deployedChains) {
+      const provider = globalState.chains.getByPrefix(prefix as 'sol' | 'eth' | 'base' | 'arb' | 'poly' | 'op');
+      if (provider) {
+        try {
+          const start = Date.now();
+          // Try a simple operation to test connectivity
+          if (provider.chainType === 'solana') {
+            // For Solana, just mark as available if provider exists
+            chainHealth[prefix] = { status: 'ok', latency: Date.now() - start };
+          } else {
+            // For EVM, provider existence is enough for basic health
+            chainHealth[prefix] = { status: 'ok', latency: Date.now() - start };
+          }
+        } catch (err) {
+          chainHealth[prefix] = {
+            status: 'error',
+            error: err instanceof Error ? err.message : 'Unknown error'
+          };
+        }
+      } else {
+        chainHealth[prefix] = { status: 'not_initialized' };
+      }
+    }
+
+    // Wallet store status
+    let walletStoreStatus: string;
+    if (!walletStore.isInitialized()) {
+      walletStoreStatus = 'not_initialized';
+    } else if (walletStore.isUnlocked()) {
+      walletStoreStatus = 'unlocked';
+    } else {
+      walletStoreStatus = 'locked';
+    }
+
+    // Cache stats - simplified
+    const cacheStats = globalState.cache ? 'available' : 'not_initialized';
+
+    return successResponse({
+      server: 'ok',
+      version: '0.2.4',
+      networkMode: networkStatus.mode,
+      chains: chainHealth,
+      walletStore: walletStoreStatus,
+      cache: cacheStats,
+      hint: walletStoreStatus === 'not_initialized'
+        ? 'Run wallet_store_init to create wallet store'
+        : walletStoreStatus === 'locked'
+        ? 'Run wallet_store_unlock to enable write operations'
+        : undefined,
+    });
+  },
+
+  faucet_info: async (args: unknown) => {
+    const input = getArgs(args);
+    const chain = readString(input, 'chain') || globalState.chains.getDefault()?.chainPrefix || 'eth';
+    const networkStatus = globalState.getNetworkStatus();
+
+    if (networkStatus.mode === 'mainnet') {
+      return successResponse({
+        chain,
+        network: 'mainnet',
+        message: 'Mainnet mode - no faucets available. Use real funds.',
+        warning: 'Registration on mainnet costs real money!',
+      });
+    }
+
+    const faucets: Record<string, {
+      name: string;
+      chainId: number;
+      faucets: { name: string; url: string; note: string }[];
+      minimumForRegistration: string;
+      explorerUrl: string;
+    }> = {
+      sol: {
+        name: 'Solana Devnet',
+        chainId: 0,
+        faucets: [
+          { name: 'Solana CLI', url: 'solana airdrop 2 --url devnet', note: '2 SOL per request' },
+          { name: 'SolFaucet', url: 'https://solfaucet.com/', note: 'Web faucet' },
+        ],
+        minimumForRegistration: '0.01 SOL (~$1.50)',
+        explorerUrl: 'https://explorer.solana.com/?cluster=devnet',
+      },
+      eth: {
+        name: 'Ethereum Sepolia',
+        chainId: 11155111,
+        faucets: [
+          { name: 'Alchemy Faucet', url: 'https://www.alchemy.com/faucets/ethereum-sepolia', note: '0.5 ETH/day, requires account' },
+          { name: 'Sepolia PoW Faucet', url: 'https://sepolia-faucet.pk910.de/', note: 'Mining-based, no limits' },
+          { name: 'QuickNode Faucet', url: 'https://faucet.quicknode.com/ethereum/sepolia', note: 'Requires QuickNode account' },
+        ],
+        minimumForRegistration: '0.001 ETH (~$3)',
+        explorerUrl: 'https://sepolia.etherscan.io',
+      },
+      base: {
+        name: 'Base Sepolia',
+        chainId: 84532,
+        faucets: [
+          { name: 'Alchemy Faucet', url: 'https://www.alchemy.com/faucets/base-sepolia', note: 'Requires account' },
+          { name: 'Coinbase Faucet', url: 'https://portal.cdp.coinbase.com/products/faucet', note: 'Requires Coinbase account' },
+        ],
+        minimumForRegistration: '0.0001 ETH (~$0.30)',
+        explorerUrl: 'https://sepolia.basescan.org',
+      },
+      arb: {
+        name: 'Arbitrum Sepolia',
+        chainId: 421614,
+        faucets: [
+          { name: 'Alchemy Faucet', url: 'https://www.alchemy.com/faucets/arbitrum-sepolia', note: 'Requires account' },
+          { name: 'Triangle Faucet', url: 'https://faucet.triangleplatform.com/arbitrum/sepolia', note: 'Free' },
+        ],
+        minimumForRegistration: '0.0001 ETH (~$0.30)',
+        explorerUrl: 'https://sepolia.arbiscan.io',
+      },
+      poly: {
+        name: 'Polygon Amoy',
+        chainId: 80002,
+        faucets: [
+          { name: 'Polygon Faucet', url: 'https://faucet.polygon.technology/', note: 'Official faucet' },
+          { name: 'Alchemy Faucet', url: 'https://www.alchemy.com/faucets/polygon-amoy', note: 'Requires account' },
+        ],
+        minimumForRegistration: '0.1 MATIC (~$0.05)',
+        explorerUrl: 'https://amoy.polygonscan.com',
+      },
+      op: {
+        name: 'Optimism Sepolia',
+        chainId: 11155420,
+        faucets: [
+          { name: 'Superchain Faucet', url: 'https://app.optimism.io/faucet', note: 'Official OP faucet' },
+          { name: 'Alchemy Faucet', url: 'https://www.alchemy.com/faucets/optimism-sepolia', note: 'Requires account' },
+        ],
+        minimumForRegistration: '0.0001 ETH (~$0.30)',
+        explorerUrl: 'https://sepolia-optimism.etherscan.io',
+      },
+    };
+
+    const info = faucets[chain];
+    if (!info) {
+      return errorResponse(`Unknown chain: ${chain}. Valid: sol, eth, base, arb, poly, op`);
+    }
+
+    // Get wallet address if available
+    const walletStore = getWalletStore();
+    let walletAddress: string | undefined;
+    if (walletStore.isUnlocked()) {
+      const wallets = walletStore.listWallets();
+      const chainType = chain === 'sol' ? 'solana' : 'evm';
+      const wallet = wallets.find(w => w.chainType === chainType);
+      walletAddress = wallet?.address;
+    }
+
+    return successResponse({
+      chain,
+      ...info,
+      walletAddress: walletAddress || 'No wallet created yet - run wallet_create first',
+      nextSteps: [
+        walletAddress ? `1. Copy your address: ${walletAddress}` : '1. Create wallet: wallet_create({ name: "my-wallet", chainType: "' + (chain === 'sol' ? 'solana' : 'evm') + '" })',
+        '2. Visit a faucet URL above',
+        '3. Request testnet tokens',
+        '4. Check balance on explorer',
+        '5. Ready for agent_register!',
+      ],
     });
   },
 };

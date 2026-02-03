@@ -2,6 +2,64 @@
 
 Multi-chain MCP server for ERC-8004 Agent Registry. Query agents, reputation, and feedback across Solana + EVM chains.
 
+---
+
+## ⚡ First Time Setup (IMPORTANT)
+
+### 1. Check System Health
+```typescript
+await client.callTool({ name: 'health_check', arguments: {} });
+// Returns: { server: 'ok', chains: {...}, walletStore: 'not_initialized', ... }
+```
+
+### 2. Initialize Wallet Store (One-Time)
+The wallet store encrypts all your wallets with a single master password.
+
+```typescript
+// ⚠️ SAVE THIS PASSWORD - Cannot be recovered if lost!
+await client.callTool({ name: 'wallet_store_init', arguments: {
+  password: 'YourSecureMasterPassword123!'
+}});
+// Returns: { initialized: true, message: 'Wallet store created' }
+```
+
+### 3. Create a Wallet
+```typescript
+await client.callTool({ name: 'wallet_create', arguments: {
+  name: 'my-eth-wallet',
+  chainType: 'evm'  // or 'solana'
+}});
+// Returns: { name: 'my-eth-wallet', address: '0x...', chainType: 'evm' }
+```
+
+### 4. Fund Your Wallet (Testnet)
+```typescript
+await client.callTool({ name: 'faucet_info', arguments: {
+  chain: 'eth'  // or 'sol', 'base'
+}});
+// Returns faucet URLs and minimum needed for registration
+```
+
+### 5. On New Sessions - Unlock Store
+```typescript
+await client.callTool({ name: 'wallet_store_unlock', arguments: {
+  password: 'YourSecureMasterPassword123!'
+}});
+// Now all write operations work
+```
+
+### Common Issues
+
+| Symptom | Cause | Solution |
+|---------|-------|----------|
+| `STORE_NOT_INITIALIZED` | First run | Call `wallet_store_init` |
+| `STORE_LOCKED` | New session | Call `wallet_store_unlock` |
+| `INVALID_PASSWORD` | Wrong password | Check password (no recovery!) |
+| Timeout on wallet ops | Store locked | Unlock first |
+| `INSUFFICIENT_BALANCE` | Empty wallet | Use faucet |
+
+---
+
 ## Quick Start (MCP Client)
 
 ```typescript
@@ -441,12 +499,14 @@ await client.callTool({ name: 'oasf_list_tags', arguments: {} });
 - `x402_feedback_build` - Build feedback file
 - `x402_feedback_submit` - Submit with proof (write)
 
-### Configuration
+### Configuration & Health
 - `config_get` - Current config
 - `config_set` - Update config
 - `config_reset` - Reset to defaults
 - `network_get` - Network status
 - `network_set` - Switch network
+- `health_check` - System health (server, chains, wallet store, cache)
+- `faucet_info` - Testnet faucet URLs and funding info
 
 ### OASF Standards
 - `oasf_list_skills` - Valid skill slugs
