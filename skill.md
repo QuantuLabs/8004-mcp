@@ -32,13 +32,26 @@ await client.callTool({ name: 'wallet_create', arguments: {
 // Returns: { name: 'my-eth-wallet', address: '0x...', chainType: 'evm' }
 ```
 
-### 4. Fund Your Wallet (Testnet)
+### 4. Fund Your Wallet
 ```typescript
-await client.callTool({ name: 'faucet_info', arguments: {
+const funding = await client.callTool({ name: 'faucet_info', arguments: {
   chain: 'eth'  // or 'sol', 'base'
 }});
-// Returns faucet URLs and minimum needed for registration
+// Returns:
+// {
+//   faucets: [...],                    // Testnet faucet URLs
+//   minimumForRegistration: "0.001 ETH (~$3)",
+//   walletAddress: "0x...",
+//   agentNote: "Most faucets require human interaction...",
+//   askOwnerToFund: "Please fund my wallet:\nAddress: 0x...\nMinimum: ...",
+//   nextSteps: [...]
+// }
 ```
+
+**⚠️ Important for Agents:**
+- Faucets usually require captchas/human interaction
+- Use `askOwnerToFund` message to request funds from your owner
+- On mainnet: no faucets, must ask owner for real funds
 
 ### 5. On New Sessions - Unlock Store
 ```typescript
@@ -56,7 +69,27 @@ await client.callTool({ name: 'wallet_store_unlock', arguments: {
 | `STORE_LOCKED` | New session | Call `wallet_store_unlock` |
 | `INVALID_PASSWORD` | Wrong password | Check password (no recovery!) |
 | Timeout on wallet ops | Store locked | Unlock first |
-| `INSUFFICIENT_BALANCE` | Empty wallet | Use faucet |
+| `INSUFFICIENT_BALANCE` | Empty wallet | Ask owner to fund (see below) |
+
+### Requesting Funds from Owner
+
+As an agent, you cannot use faucets directly (captchas). Ask your owner:
+
+```typescript
+// 1. Get funding info
+const info = await client.callTool({ name: 'faucet_info', arguments: { chain: 'eth' }});
+const parsed = JSON.parse(info.content[0].text);
+
+// 2. Send this message to your owner:
+console.log(parsed.askOwnerToFund);
+// Output:
+// "Please fund my Ethereum Sepolia wallet:
+//  Address: 0x1234...
+//  Minimum needed: 0.001 ETH (~$3)
+//  Explorer: https://sepolia.etherscan.io/address/0x1234..."
+
+// 3. Wait for owner to send funds, then proceed with agent_register
+```
 
 ---
 
