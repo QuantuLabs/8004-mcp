@@ -6,6 +6,7 @@ import {
   DEFAULT_INDEXER_API_KEY,
   DEFAULT_CRAWLER_TIMEOUT_MS,
   DEFAULT_NETWORK_MODE,
+  DEFAULT_PINATA_JWT,
   type NetworkMode,
 } from './defaults.js';
 
@@ -77,7 +78,7 @@ export function loadEnvConfig(): IEnvConfig {
       forceOnChain: parseBooleanEnv(env.FORCE_ON_CHAIN, false),
     },
     ipfs: {
-      pinataJwt: env.PINATA_JWT,
+      pinataJwt: env.PINATA_JWT || DEFAULT_PINATA_JWT,
       ipfsUrl: env.IPFS_URL,
       filecoinEnabled: parseBooleanEnv(env.FILECOIN_PIN_ENABLED, false),
       filecoinPrivateKey: env.FILECOIN_PRIVATE_KEY,

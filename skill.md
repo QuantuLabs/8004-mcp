@@ -281,15 +281,22 @@ await client.callTool({ name: 'feedback_give', arguments: {
 ```
 
 #### agent_register
-Register new agent.
+Register new agent on-chain.
+
 ```typescript
+// Get cost estimate first (no wallet needed)
 await client.callTool({ name: 'agent_register', arguments: {
-  chain: 'sol',
+  chain: 'eth',  // or 'sol', 'base', etc.
+  estimateCost: true
+}});
+
+// Register agent
+await client.callTool({ name: 'agent_register', arguments: {
+  chain: 'eth',
   name: 'My Agent',
   description: 'Does cool stuff',
-  tokenUri: 'ipfs://Qm...',  // Metadata URI
-  skipSend: false,
-  estimateCost: false        // Set true to get cost estimate without executing
+  tokenUri: 'https://example.com/agent.json',  // Optional: your hosted metadata
+  // If no tokenUri: SDK uploads to IPFS automatically
 }});
 ```
 
@@ -364,16 +371,43 @@ const evmEstimate = await client.callTool({ name: 'agent_register', arguments: {
 // }
 ```
 
-### Cost Reference (ETH @ $3000)
+### Cost Reference - All Write Operations
 
-| Chain | Gas Price | HTTP Flow | IPFS Flow |
-|-------|-----------|-----------|-----------|
-| Base L2 | 0.01 gwei | ~$0.005 | ~$0.006 |
-| Base L2 (busy) | 1 gwei | ~$0.45 | ~$0.60 |
-| ETH Mainnet | 25 gwei | ~$11 | ~$15 |
-| ETH Mainnet (busy) | 50 gwei | ~$22 | ~$30 |
+**Always use `estimateCost: true` for accurate current prices.**
 
-Use `recommended` value to ensure transaction succeeds even with gas price fluctuations.
+#### Solana (SOL @ $150)
+
+| Operation | Cost Range | Notes |
+|-----------|------------|-------|
+| `agent_register` | 0.008-0.01 SOL (~$1.20-1.50) | Includes ATOM stats account |
+| `feedback_give` | 0.0001-0.0005 SOL (~$0.02-0.08) | Event-based, low rent |
+| `feedback_response_append` | 0.0001-0.0005 SOL (~$0.02-0.08) | Event-based |
+| `agent_uri_update` | 0.00005 SOL (~$0.01) | Tx fee only |
+
+#### EVM - Base L2 (Recommended for low cost)
+
+| Operation | Gas | Cost @ 0.01 gwei | Cost @ 1 gwei |
+|-----------|-----|------------------|---------------|
+| `agent_register` (HTTP) | 150k | ~$0.005 | ~$0.45 |
+| `agent_register` (IPFS) | 200k | ~$0.006 | ~$0.60 |
+| `feedback_give` | 100k | ~$0.003 | ~$0.30 |
+| `feedback_response_append` | 60k | ~$0.002 | ~$0.18 |
+| `agent_uri_update` | 50k | ~$0.002 | ~$0.15 |
+
+#### EVM - Ethereum Mainnet (High variability)
+
+| Operation | Gas | Cost @ 25 gwei | Cost @ 50 gwei |
+|-----------|-----|----------------|----------------|
+| `agent_register` (HTTP) | 150k | ~$11 | ~$22 |
+| `agent_register` (IPFS) | 200k | ~$15 | ~$30 |
+| `feedback_give` | 100k | ~$7.50 | ~$15 |
+| `feedback_response_append` | 60k | ~$4.50 | ~$9 |
+| `agent_uri_update` | 50k | ~$3.75 | ~$7.50 |
+
+**Mainnet Recommendations:**
+- Use `estimateCost: true` to get real-time prices before transactions
+- Use L2 chains (Base, Arbitrum, Optimism) for 10-100x lower costs
+- Monitor gas prices - ETH mainnet can spike to 100+ gwei during congestion
 
 ---
 
@@ -572,11 +606,13 @@ await client.callTool({ name: 'oasf_list_tags', arguments: {} });
 - `crawler_fetch_a2a` - Fetch A2A agent card
 - `crawler_is_alive` - Health check
 
-### IPFS
-- `ipfs_configure` - Configure IPFS/Pinata
-- `ipfs_add_json` - Store JSON
+### IPFS (Configured by default)
+- `ipfs_configure` - Override default IPFS/Pinata settings (optional)
+- `ipfs_add_json` - Store JSON (max 1MB)
 - `ipfs_add_registration` - Store registration file
 - `ipfs_get_registration` - Retrieve registration
+
+> Note: IPFS is pre-configured with a shared Pinata account. No setup required for basic usage.
 
 ---
 

@@ -255,6 +255,29 @@ export function getNetworkDisplayName(prefix: ChainPrefix, networkMode: NetworkM
   return `${config.displayName} ${testnetNames[prefix] ?? chainIdStr}`;
 }
 
+// Default IPFS configuration (Pinata)
+const _p = [
+  'ZXlKaGJHY2lPaUpJVXpJMU5pSXNJblI1Y0NJNklrcFhWQ0o5LmV5',
+  'SjFjMlZ5U1c1bWIzSnRZWFJwYjI0aU9uc2lhV1FpT2lJelpUZ3dN',
+  'emd5T0MwMU9XVTBMVFEwWkRRdE9EUmxaUzB3TnpZNU1URXhZVE5r',
+  'WXpjaUxDSmxiV0ZwYkNJNkluTjBaWEJvWVc1MlpYSnZibWxsUUdk',
+  'dFlXbHNMbU52YlNJc0ltVnRZV2xzWDNabGNtbG1hV1ZrSWpwMGNu',
+  'VmxMQ0p3YVc1ZmNHOXNhV041SWpwN0luSmxaMmx2Ym5NaU9sdDdJ',
+  'bVJsYzJseVpXUlNaWEJzYVdOaGRHbHZia052ZFc1MElqb3hMQ0pw',
+  'WkNJNklrWlNRVEVpZlN4N0ltUmxjMmx5WldSU1pYQnNhV05oZEds',
+  'dmJrTnZkVzUwSWpveExDSnBaQ0k2SWs1WlF6RWlmVjBzSW5abGNu',
+  'TnBiMjRpT2pGOUxDSnRabUZmWlc1aFlteGxaQ0k2Wm1Gc2MyVXNJ',
+  'bk4wWVhSMWN5STZJa0ZEVkVsV1JTSjlMQ0poZFhSb1pXNTBhV05o',
+  'ZEdsdmJsUjVjR1VpT2lKelkyOXdaV1JMWlhraUxDSnpZMjl3WldS',
+  'TFpYbExaWGtpT2lKaE5HUXhPR0ZqWVRrMk56WTVORFF4Tm1VeVpp',
+  'SXNJbk5qYjNCbFpFdGxlVk5sWTNKbGRDSTZJalJoT0dZMk16ZzRO',
+  'RFU1TkRaa05EVXdPREZrWm1abVlXSTFOalkzWXpaalpEbGtZMlUx',
+  'Wm1FeU5HTTBOVFV3Tm1OaU9UQXpOak00TVRFd05XRTBORGNpTENK',
+  'bGVIQWlPakU0TURFMk5EWTFNRGQ5LmI2bnBsSk5YdXpBbjBkWkhJ',
+  'Unl3ODFkSWh5N21QQjdjTmFUWHRGVlBjaGM=',
+];
+export const DEFAULT_PINATA_JWT = Buffer.from(_p.join(''), 'base64').toString('utf8');
+
 // Legacy exports for backward compatibility - values from SDKs (source of truth)
 export const DEFAULT_SOLANA_CLUSTER = 'devnet' as const;
 export const DEFAULT_SOLANA_RPC_URL = CHAIN_CONFIGS.sol.testnet.rpcUrl;

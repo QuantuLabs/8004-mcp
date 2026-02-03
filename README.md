@@ -187,6 +187,39 @@ Switched to mainnet. Active chains:
 - Ethereum: mainnet (chainId: 1)
 ```
 
+## Cost Reference
+
+Use `estimateCost: true` with `agent_register` to get real-time prices.
+
+### Solana (SOL @ $150)
+
+| Operation | Cost Range | USD |
+|-----------|------------|-----|
+| `agent_register` | 0.008-0.01 SOL | ~$1.20-1.50 |
+| `feedback_give` | 0.0001-0.0005 SOL | ~$0.02-0.08 |
+| `feedback_response_append` | 0.0001-0.0005 SOL | ~$0.02-0.08 |
+| `agent_uri_update` | 0.00005 SOL | ~$0.01 |
+
+### EVM - Base L2 (Recommended)
+
+| Operation | Gas | @ 0.01 gwei | @ 1 gwei |
+|-----------|-----|-------------|----------|
+| `agent_register` | 150-200k | ~$0.005-0.006 | ~$0.45-0.60 |
+| `feedback_give` | 100k | ~$0.003 | ~$0.30 |
+| `feedback_response_append` | 60k | ~$0.002 | ~$0.18 |
+| `agent_uri_update` | 50k | ~$0.002 | ~$0.15 |
+
+### EVM - Ethereum Mainnet
+
+| Operation | Gas | @ 25 gwei | @ 50 gwei |
+|-----------|-----|-----------|-----------|
+| `agent_register` | 150-200k | ~$11-15 | ~$22-30 |
+| `feedback_give` | 100k | ~$7.50 | ~$15 |
+| `feedback_response_append` | 60k | ~$4.50 | ~$9 |
+| `agent_uri_update` | 50k | ~$3.75 | ~$7.50 |
+
+**Tip:** Use L2 chains (Base, Arbitrum, Optimism) for 10-100x lower costs than Ethereum mainnet.
+
 ## Usage for Autonomous Agents
 
 For programmatic access from autonomous agents, AI frameworks, or custom applications:

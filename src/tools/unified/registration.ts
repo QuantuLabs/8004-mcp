@@ -117,7 +117,7 @@ export const registrationHandlers: Record<string, (args: unknown) => Promise<unk
     }
 
     if (targetChain === 'sol') {
-      return registerSolanaAgent({ tokenUri, collection, skipSend });
+      return registerSolanaAgent({ name, description, image, tokenUri, collection, mcpEndpoint, a2aEndpoint, skipSend });
     } else {
       if (skipSend) {
         throw new Error('skipSend is not supported for EVM registration. Transactions are always sent.');
@@ -170,16 +170,79 @@ export const registrationHandlers: Record<string, (args: unknown) => Promise<unk
   },
 };
 
+// Build ERC-8004 Registration v1 compliant file
+function buildRegistrationV1(params: {
+  name: string;
+  description: string;
+  image?: string;
+  mcpEndpoint?: string;
+  a2aEndpoint?: string;
+}): Record<string, unknown> {
+  const { name, description, image, mcpEndpoint, a2aEndpoint } = params;
+
+  // Build services array
+  const services: Array<Record<string, unknown>> = [];
+  if (mcpEndpoint) {
+    services.push({ name: 'MCP', endpoint: mcpEndpoint });
+  }
+  if (a2aEndpoint) {
+    services.push({ name: 'A2A', endpoint: a2aEndpoint });
+  }
+
+  const registration: Record<string, unknown> = {
+    type: 'https://eips.ethereum.org/EIPS/eip-8004#registration-v1',
+    name,
+    description,
+    services,
+    supportedTrust: ['reputation'],
+    active: true,
+    x402Support: false,
+  };
+
+  if (image) {
+    registration.image = image;
+  }
+
+  return registration;
+}
+
 // Solana agent registration
 async function registerSolanaAgent(params: {
+  name?: string;
+  description?: string;
+  image?: string;
   tokenUri?: string;
   collection?: string;
+  mcpEndpoint?: string;
+  a2aEndpoint?: string;
   skipSend: boolean;
 }): Promise<unknown> {
-  const { tokenUri, collection, skipSend } = params;
+  const { name, description, image, tokenUri, collection, mcpEndpoint, a2aEndpoint, skipSend } = params;
 
+  let finalTokenUri = tokenUri;
+
+  // Auto-upload to IPFS if no tokenUri provided
   if (!tokenUri) {
-    throw new Error('tokenUri is required for Solana agent registration. Upload metadata to IPFS first using ipfs_add_registration.');
+    if (!globalState.ipfs.isConfigured()) {
+      throw new Error(
+        'No tokenUri provided and IPFS not configured. Either:\n' +
+        '1. Provide tokenUri with your hosted metadata (HTTP or IPFS)\n' +
+        '2. Configure IPFS with ipfs_configure first for automatic upload'
+      );
+    }
+
+    // Build ERC-8004 Registration v1 file (same structure for Solana and EVM)
+    const registration = buildRegistrationV1({
+      name: name || 'Unnamed Agent',
+      description: description || '',
+      image,
+      mcpEndpoint,
+      a2aEndpoint,
+    });
+
+    // Upload to IPFS
+    const cid = await globalState.ipfs.addJson(registration);
+    finalTokenUri = `ipfs://${cid}`;
   }
 
   const provider = globalState.chains.getByPrefix('sol') as SolanaChainProvider | null;
@@ -196,7 +259,7 @@ async function registerSolanaAgent(params: {
   // Parse collection if provided
   const collectionPubkey = collection ? new PublicKey(collection) : undefined;
 
-  const result = await sdk.registerAgent(tokenUri, collectionPubkey, { skipSend });
+  const result = await sdk.registerAgent(finalTokenUri, collectionPubkey, { skipSend });
 
   if (skipSend && 'transaction' in result) {
     return successResponse({
@@ -256,15 +319,34 @@ async function registerEvmAgent(params: {
     await agent.setA2A(a2aEndpoint);
   }
 
-  // Register on-chain and wait for confirmation
-  let txHandle;
-  if (tokenUri) {
-    // Use provided URI (HTTP or IPFS)
-    txHandle = await agent.registerHTTP(tokenUri);
-  } else {
-    // Upload to IPFS and register
-    txHandle = await agent.registerIPFS();
+  // Determine final tokenUri
+  let finalTokenUri = tokenUri;
+
+  // Auto-upload to IPFS using global service if no tokenUri provided
+  if (!tokenUri) {
+    if (!globalState.ipfs.isConfigured()) {
+      throw new Error(
+        'No tokenUri provided and IPFS not configured. Either:\n' +
+        '1. Provide tokenUri with your hosted metadata (HTTP or IPFS)\n' +
+        '2. Configure IPFS with ipfs_configure first for automatic upload'
+      );
+    }
+
+    // Build ERC-8004 Registration v1 file (same structure for Solana and EVM)
+    const registration = buildRegistrationV1({
+      name: agentName,
+      description: agentDescription,
+      image,
+      mcpEndpoint,
+      a2aEndpoint,
+    });
+
+    const cid = await globalState.ipfs.addJson(registration);
+    finalTokenUri = `ipfs://${cid}`;
   }
+
+  // Register on-chain with the URI (finalTokenUri is guaranteed to be set here)
+  const txHandle = await agent.registerHTTP(finalTokenUri!);
 
   // Wait for transaction to be mined (returns { receipt, result })
   const { receipt, result: registrationFile } = await txHandle.waitMined();

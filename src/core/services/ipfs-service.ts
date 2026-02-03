@@ -10,6 +10,7 @@ export interface IIPFSService {
   clearConfig(): void;
   getConfig(): IPFSClientConfig | undefined;
   addJson(data: Record<string, unknown>, name?: string): Promise<string>;
+  addFile(filepath: string): Promise<string>;
   getJson<T = Record<string, unknown>>(cid: string): Promise<T>;
   addRegistrationFile(
     registrationFile: RegistrationFile,
@@ -69,6 +70,14 @@ export class IPFSService implements IIPFSService {
   async addJson(data: Record<string, unknown>, _name?: string): Promise<string> {
     const client = this.getClient();
     return client.addJson(data);
+  }
+
+  /**
+   * Add file to IPFS and return CID
+   */
+  async addFile(filepath: string): Promise<string> {
+    const client = this.getClient();
+    return client.addFile(filepath);
   }
 
   /**
