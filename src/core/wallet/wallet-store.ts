@@ -114,6 +114,13 @@ export class WalletStore {
   private sessionExpiresAt: number | null = null;
   private sessionTimeoutMs: number = DEFAULT_SESSION_TIMEOUT_MS;
 
+  // Rate limiting for unlock attempts
+  private unlockFailCount = 0;
+  private unlockLockedUntil = 0;
+
+  // Write mutex for saveStore serialization
+  private writeLock: Promise<void> = Promise.resolve();
+
   constructor(baseDir?: string) {
     this.baseDir = baseDir ?? join(homedir(), '.8004-mcp');
     this.storePath = join(this.baseDir, 'wallet-store.enc');
@@ -235,6 +242,13 @@ export class WalletStore {
       throw new Error('Password required.');
     }
 
+    // Rate limiting: check if locked out
+    const now = Date.now();
+    if (now < this.unlockLockedUntil) {
+      const waitSec = Math.ceil((this.unlockLockedUntil - now) / 1000);
+      throw new Error(`Too many failed attempts. Try again in ${waitSec}s.`);
+    }
+
     if (!await this.isInitialized()) {
       throw new Error('Wallet store not initialized. Use initialize() first.');
     }
@@ -267,8 +281,17 @@ export class WalletStore {
     try {
       decrypted = this.decrypt(ciphertext, key, nonce, authTag);
     } catch {
+      this.unlockFailCount++;
+      if (this.unlockFailCount >= 5) {
+        const delayMs = Math.min(1000 * Math.pow(2, this.unlockFailCount - 5), 16000);
+        this.unlockLockedUntil = Date.now() + delayMs;
+      }
       throw new Error('Incorrect master password.');
     }
+
+    // Reset rate limiting on success
+    this.unlockFailCount = 0;
+    this.unlockLockedUntil = 0;
 
     const content = JSON.parse(decrypted.toString('utf-8')) as StoreContent;
 
@@ -355,8 +378,15 @@ export class WalletStore {
     }
   }
 
-  // Save store to disk
-  private async saveStore(): Promise<void> {
+  // Save store to disk (serialized via mutex)
+  private saveStore(): Promise<void> {
+    const prev = this.writeLock;
+    let resolve: () => void;
+    this.writeLock = new Promise<void>(r => { resolve = r; });
+    return prev.then(() => this.saveStoreInner()).finally(() => resolve!());
+  }
+
+  private async saveStoreInner(): Promise<void> {
     if (!this.masterKey || !this.storeContent) {
       throw new Error('Store not unlocked.');
     }

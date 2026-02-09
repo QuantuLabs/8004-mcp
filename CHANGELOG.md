@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.3.2] - 2026-02-09
+
+### Added
+- BSC Mainnet (56) and Testnet (97) chain support
+- Monad Mainnet (143) and Testnet (10143) chain support
+- IPFS CID format validation (CIDv0/CIDv1)
+
+### Removed
+- Arbitrum and Optimism chains (no deployed contracts)
+
+### Security
+- Wallet unlock rate limiting with exponential backoff (1s→16s max after 5 failures)
+- Write mutex on wallet store to prevent race conditions
+- DNS rebinding service blocking (nip.io, sslip.io, xip.io, localtest.me) in endpoint URL validation
+- Error message sanitization in main handler to prevent sensitive data leakage
+- FTS5 query escaping for boolean/proximity operators
+- Circular reference protection in JSON serialization
+
+### Fixed
+- Hardcoded contract addresses from subgraph source of truth
+
 ## [0.3.1] - 2026-02-09
 
 ### Added

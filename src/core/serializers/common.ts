@@ -68,7 +68,20 @@ export function formatOutput(value: unknown): string {
   if (typeof value === 'string') {
     return value;
   }
-  return JSON.stringify(serialize(value), null, 2);
+  try {
+    return JSON.stringify(serialize(value), null, 2);
+  } catch {
+    // Fallback for circular references or other serialization errors
+    const seen = new WeakSet();
+    return JSON.stringify(value, (_key, val) => {
+      if (typeof val === 'object' && val !== null) {
+        if (seen.has(val)) return '[Circular]';
+        seen.add(val);
+      }
+      if (typeof val === 'bigint') return val.toString();
+      return val;
+    }, 2);
+  }
 }
 
 // Format for MCP content response

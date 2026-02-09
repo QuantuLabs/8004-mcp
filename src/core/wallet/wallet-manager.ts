@@ -132,6 +132,10 @@ export class WalletManager {
   private sessionTokens: Map<string, string> = new Map(); // token -> walletName
   private autoLockMs: number = DEFAULT_AUTO_LOCK_MS;
 
+  // Rate limiting for unlock attempts (per wallet)
+  private unlockFailCounts: Map<string, number> = new Map();
+  private unlockLockedUntil: Map<string, number> = new Map();
+
   constructor(walletDir?: string) {
     this.walletDir = walletDir ?? join(homedir(), '.8004-mcp');
     this.walletsPath = join(this.walletDir, 'wallets');
@@ -654,6 +658,14 @@ export class WalletManager {
 
   // Unlock wallet with password
   async unlock(name: string, password: string): Promise<WalletUnlockResult> {
+    // Rate limiting: check if locked out
+    const now = Date.now();
+    const lockedUntil = this.unlockLockedUntil.get(name) ?? 0;
+    if (now < lockedUntil) {
+      const waitSec = Math.ceil((lockedUntil - now) / 1000);
+      throw new Error(`Too many failed attempts for "${name}". Try again in ${waitSec}s.`);
+    }
+
     // Check if wallet exists
     if (!(await this.exists(name))) {
       throw new Error(`Wallet "${name}" not found. Use wallet_list to see available wallets.`);
@@ -699,8 +711,18 @@ export class WalletManager {
     try {
       secretKey = this.decrypt(ciphertext, key, nonce, authTag);
     } catch {
+      const failCount = (this.unlockFailCounts.get(name) ?? 0) + 1;
+      this.unlockFailCounts.set(name, failCount);
+      if (failCount >= 5) {
+        const delayMs = Math.min(1000 * Math.pow(2, failCount - 5), 16000);
+        this.unlockLockedUntil.set(name, Date.now() + delayMs);
+      }
       throw new Error('Incorrect password.');
     }
+
+    // Reset rate limiting on success
+    this.unlockFailCounts.delete(name);
+    this.unlockLockedUntil.delete(name);
 
     // Reconstruct keys based on chain type
     if (walletFile.chainType === 'solana') {

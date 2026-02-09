@@ -34,6 +34,19 @@ function validateEndpointUrl(urlString: string, label: string): void {
       throw new Error(`${label} URL points to private IP: ${hostname}`);
     }
   }
+
+  // DNS rebinding service patterns
+  const rebindingPatterns = [
+    /\.nip\.io$/i,
+    /\.sslip\.io$/i,
+    /\.xip\.io$/i,
+    /\.localtest\.me$/i,
+  ];
+  for (const p of rebindingPatterns) {
+    if (p.test(hostname)) {
+      throw new Error(`${label} URL uses DNS rebinding service: ${hostname}`);
+    }
+  }
 }
 
 export const configTools: Tool[] = [

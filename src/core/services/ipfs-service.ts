@@ -93,9 +93,27 @@ export class IPFSService implements IIPFSService {
   }
 
   /**
+   * Validate CID format (CIDv0 or CIDv1)
+   */
+  private validateCid(cid: string): void {
+    if (!cid || typeof cid !== 'string') {
+      throw new Error('CID is required');
+    }
+    const trimmed = cid.trim();
+    // CIDv0: 46 chars, starts with Qm, base58btc
+    const isCidV0 = /^Qm[1-9A-HJ-NP-Za-km-z]{44}$/.test(trimmed);
+    // CIDv1: starts with b (base32) or z (base58btc), variable length
+    const isCidV1 = /^[bz][a-z2-7A-Za-z0-9]{10,}$/.test(trimmed);
+    if (!isCidV0 && !isCidV1) {
+      throw new Error(`Invalid CID format: ${trimmed.substring(0, 20)}...`);
+    }
+  }
+
+  /**
    * Get JSON data from IPFS by CID
    */
   async getJson<T = Record<string, unknown>>(cid: string): Promise<T> {
+    this.validateCid(cid);
     const client = this.getClient();
     return client.getJson<T>(cid);
   }
@@ -116,6 +134,7 @@ export class IPFSService implements IIPFSService {
    * Get registration file from IPFS by CID
    */
   async getRegistrationFile(cid: string): Promise<RegistrationFile> {
+    this.validateCid(cid);
     const client = this.getClient();
     return client.getRegistrationFile(cid);
   }

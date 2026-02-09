@@ -1,6 +1,6 @@
 # @quantulabs/8004-mcp
 
-Multi-chain MCP server for the ERC-8004 Agent Registry Standard. Supports Solana and EVM chains (Ethereum, Base, Arbitrum, Polygon, Optimism).
+Multi-chain MCP server for the ERC-8004 Agent Registry Standard. Supports Solana and EVM chains (Ethereum, Base, Polygon, BSC, Monad).
 
 ## Requirements
 
@@ -21,7 +21,7 @@ npx @quantulabs/8004-mcp
 
 ## Features
 
-- **Multi-chain**: Solana + EVM (Base, Ethereum, Arbitrum, Polygon, Optimism)
+- **Multi-chain**: Solana + EVM (Base, Ethereum, Polygon, BSC, Monad)
 - **Unified API**: Same tools work across chains with automatic routing
 - **Wallet Management**: Encrypted local storage with auto-lock
 - **Local Cache**: SQLite with FTS5 for fast agent search
@@ -218,7 +218,7 @@ Use `estimateCost: true` with `agent_register` to get real-time prices.
 | `feedback_response_append` | 60k | ~$4.50 | ~$9 |
 | `agent_uri_update` | 50k | ~$3.75 | ~$7.50 |
 
-**Tip:** Use L2 chains (Base, Arbitrum, Optimism) for 10-100x lower costs than Ethereum mainnet.
+**Tip:** Use L2/alt chains (Base, BSC, Monad) for 10-100x lower costs than Ethereum mainnet.
 
 ## Usage for Autonomous Agents
 
@@ -328,9 +328,9 @@ Agents are identified using global IDs that include chain info:
 | Solana | `sol:<pubkey>` | `sol:7xKXtG8vN2mPQr...` |
 | Ethereum | `eth:<chainId>:<tokenId>` | `eth:11155111:738` (Sepolia) |
 | Base | `base:<chainId>:<tokenId>` | `base:84532:42` (Sepolia) |
-| Arbitrum | `arb:<chainId>:<tokenId>` | `arb:421614:123` |
 | Polygon | `poly:<chainId>:<tokenId>` | `poly:80002:456` |
-| Optimism | `op:<chainId>:<tokenId>` | `op:11155420:789` |
+| BSC | `bsc:<chainId>:<tokenId>` | `bsc:97:123` |
+| Monad | `monad:<chainId>:<tokenId>` | `monad:10143:789` |
 
 **Note:** When using `agent_get`, you can pass either:
 - Full globalId: `eth:11155111:738`

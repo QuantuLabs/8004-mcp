@@ -620,9 +620,20 @@ export class SqliteStore {
   }
 
   private escapeFtsQuery(query: string): string {
-    // Escape special FTS5 characters and wrap in quotes for phrase search
-    const escaped = query.replace(/["]/g, '""');
-    return `"${escaped}"`;
+    // Strip FTS5 operators and special syntax
+    let cleaned = query;
+    // Remove column filter syntax (column:)
+    cleaned = cleaned.replace(/\w+:/g, '');
+    // Remove FTS5 boolean/proximity operators
+    cleaned = cleaned.replace(/\b(NEAR|NOT|AND|OR)\b/gi, '');
+    // Remove operator characters: * + - ( )
+    cleaned = cleaned.replace(/[*+\-()]/g, '');
+    // Escape double quotes for phrase search
+    cleaned = cleaned.replace(/"/g, '""');
+    // Trim whitespace
+    cleaned = cleaned.trim();
+    if (!cleaned) return '""';
+    return `"${cleaned}"`;
   }
 
   private formatBytes(bytes: number): string {

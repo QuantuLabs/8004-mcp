@@ -24,6 +24,7 @@ import {
   getAllTools,
 } from './tools/definitions.js';
 import { formatOutput } from './core/serializers/common.js';
+import { sanitizeErrorMessage } from './core/errors/mcp-error.js';
 import { getWalletManager } from './core/wallet/index.js';
 
 const SERVER_NAME = '8004-mcp';
@@ -136,7 +137,8 @@ async function main() {
         content: [{ type: 'text', text: formatOutput(result) }],
       };
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
+      const raw = error instanceof Error ? error.message : String(error);
+      const message = sanitizeErrorMessage(raw);
       return {
         content: [{ type: 'text', text: `Error: ${message}` }],
         isError: true,

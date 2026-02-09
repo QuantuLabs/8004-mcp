@@ -55,7 +55,7 @@ Complete list of all MCP tools available in @quantulabs/8004-mcp.
 | `endpointQuery` | string | Search by MCP/A2A endpoint |
 | `searchMode` | string | `name`, `description`, `endpoint`, or `all` (default) |
 | `owner` | string | Filter by owner address |
-| `chain` | string | Chain prefix (`sol`, `base`, `eth`, `all`) |
+| `chain` | string | Chain prefix (`sol`, `base`, `eth`, `poly`, `bsc`, `monad`, `all`) |
 | `mcpTools` | string[] | Filter by MCP tools |
 | `a2aSkills` | string[] | Filter by A2A skills |
 | `oasfSkills` | string[] | Filter by OASF skills (e.g., `text-generation`) |
@@ -336,6 +336,6 @@ Agents use global IDs for cross-chain identification:
 | Solana | `sol:<pubkey>` | `sol:AgentPubkeyBase58...` |
 | Base | `base:<chainId>:<tokenId>` | `base:8453:123` |
 | Ethereum | `eth:<chainId>:<tokenId>` | `eth:1:456` |
-| Arbitrum | `arb:<chainId>:<tokenId>` | `arb:42161:789` |
 | Polygon | `poly:<chainId>:<tokenId>` | `poly:137:101` |
-| Optimism | `op:<chainId>:<tokenId>` | `op:10:202` |
+| BSC | `bsc:<chainId>:<tokenId>` | `bsc:56:789` |
+| Monad | `monad:<chainId>:<tokenId>` | `monad:143:202` |

@@ -137,7 +137,7 @@ export function walletError(message: string, details?: Record<string, unknown>):
  * Sanitize error messages to prevent sensitive data leakage
  * Removes potential private keys, tokens, and other sensitive patterns
  */
-function sanitizeErrorMessage(message: string): string {
+export function sanitizeErrorMessage(message: string): string {
   let sanitized = message;
 
   // Remove 64-char hex strings (potential EVM private keys)
