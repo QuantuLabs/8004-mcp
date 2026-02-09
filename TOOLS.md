@@ -284,7 +284,7 @@ const result = await x402_feedback_build({
   endpoint: "https://agent.example.com/api",
   proofOfPayment: { txHash: "0x...", fromAddress: "0x...", toAddress: "0x...", chainId: "84532" }
 });
-// Returns: { feedbackFile: {...}, feedbackHash: "0x35d6439b..." }
+// Returns: { feedbackFile: {...}, sealHash: "0x35d6439b..." }
 
 // 2. Store the file yourself (Arweave, your own IPFS, HTTP server, etc.)
 const feedbackUri = "ar://abc123..."; // or "ipfs://Qm...", "https://..."

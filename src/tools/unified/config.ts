@@ -323,7 +323,7 @@ export const configHandlers: Record<string, (args: unknown) => Promise<unknown>>
 
     return successResponse({
       server: 'ok',
-      version: '0.2.4',
+      version: '0.3.0',
       networkMode: networkStatus.mode,
       chains: chainHealth,
       walletStore: walletStoreStatus,
