@@ -21,7 +21,7 @@ describe('Network Mode Configuration', () => {
 
   describe('CHAIN_CONFIGS', () => {
     it('should have all chain prefixes configured', () => {
-      const expectedPrefixes: ChainPrefix[] = ['sol', 'base', 'eth', 'arb', 'poly', 'op'];
+      const expectedPrefixes: ChainPrefix[] = ['sol', 'base', 'eth', 'poly', 'bsc', 'monad'];
       for (const prefix of expectedPrefixes) {
         expect(CHAIN_CONFIGS[prefix]).toBeDefined();
       }
@@ -52,17 +52,17 @@ describe('Network Mode Configuration', () => {
       expect(CHAIN_CONFIGS.eth.testnet.chainId).toBe(11155111); // Sepolia
       expect(CHAIN_CONFIGS.eth.mainnet.chainId).toBe(1);
 
-      // Arbitrum
-      expect(CHAIN_CONFIGS.arb.testnet.chainId).toBe(421614); // Sepolia
-      expect(CHAIN_CONFIGS.arb.mainnet.chainId).toBe(42161);
-
       // Polygon
       expect(CHAIN_CONFIGS.poly.testnet.chainId).toBe(80002); // Amoy
       expect(CHAIN_CONFIGS.poly.mainnet.chainId).toBe(137);
 
-      // Optimism
-      expect(CHAIN_CONFIGS.op.testnet.chainId).toBe(11155420); // Sepolia
-      expect(CHAIN_CONFIGS.op.mainnet.chainId).toBe(10);
+      // BSC
+      expect(CHAIN_CONFIGS.bsc.testnet.chainId).toBe(97);
+      expect(CHAIN_CONFIGS.bsc.mainnet.chainId).toBe(56);
+
+      // Monad
+      expect(CHAIN_CONFIGS.monad.testnet.chainId).toBe(10143);
+      expect(CHAIN_CONFIGS.monad.mainnet.chainId).toBe(143);
     });
 
     it('should have Solana devnet registries configured', () => {
@@ -107,16 +107,17 @@ describe('Network Mode Configuration', () => {
     });
 
     it('should return true for EVM chains with testnet deployments', () => {
-      // Only ETH Sepolia has deployed contracts (from agent0-sdk)
       expect(isChainDeployed('eth', 'testnet')).toBe(true);
-      // Base, Poly etc not deployed yet
-      expect(isChainDeployed('base', 'testnet')).toBe(false);
-      expect(isChainDeployed('poly', 'testnet')).toBe(false);
+      expect(isChainDeployed('base', 'testnet')).toBe(true);
+      expect(isChainDeployed('poly', 'testnet')).toBe(true);
+      expect(isChainDeployed('bsc', 'testnet')).toBe(true);
+      expect(isChainDeployed('monad', 'testnet')).toBe(true);
     });
 
     it('should return correct deployment status for EVM mainnet chains', () => {
-      expect(isChainDeployed('eth', 'mainnet')).toBe(true); // ETH mainnet is deployed
-      expect(isChainDeployed('base', 'mainnet')).toBe(false);
+      expect(isChainDeployed('eth', 'mainnet')).toBe(true);
+      expect(isChainDeployed('base', 'mainnet')).toBe(true);
+      expect(isChainDeployed('poly', 'mainnet')).toBe(true);
     });
 
     it('should return false for unknown prefix', () => {
@@ -143,18 +144,18 @@ describe('Network Mode Configuration', () => {
       expect(getNetworkDisplayName('sol', 'testnet')).toBe('Solana Devnet');
       expect(getNetworkDisplayName('base', 'testnet')).toBe('Base Sepolia');
       expect(getNetworkDisplayName('eth', 'testnet')).toBe('Ethereum Sepolia');
-      expect(getNetworkDisplayName('arb', 'testnet')).toBe('Arbitrum Sepolia');
       expect(getNetworkDisplayName('poly', 'testnet')).toBe('Polygon Amoy');
-      expect(getNetworkDisplayName('op', 'testnet')).toBe('Optimism Sepolia');
+      expect(getNetworkDisplayName('bsc', 'testnet')).toContain('BSC');
+      expect(getNetworkDisplayName('monad', 'testnet')).toContain('Monad');
     });
 
     it('should return correct mainnet names', () => {
       expect(getNetworkDisplayName('sol', 'mainnet')).toBe('Solana Mainnet');
       expect(getNetworkDisplayName('base', 'mainnet')).toBe('Base Mainnet');
       expect(getNetworkDisplayName('eth', 'mainnet')).toBe('Ethereum Mainnet');
-      expect(getNetworkDisplayName('arb', 'mainnet')).toBe('Arbitrum Mainnet');
       expect(getNetworkDisplayName('poly', 'mainnet')).toBe('Polygon Mainnet');
-      expect(getNetworkDisplayName('op', 'mainnet')).toBe('Optimism Mainnet');
+      expect(getNetworkDisplayName('bsc', 'mainnet')).toContain('BSC');
+      expect(getNetworkDisplayName('monad', 'mainnet')).toContain('Monad');
     });
 
     it('should handle unknown prefix gracefully', () => {
