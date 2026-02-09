@@ -524,10 +524,10 @@ export const writeOperationHandlers: Record<string, (args: unknown) => Promise<u
         if (!feedback) {
           throw new Error(`Feedback not found: agent=${rawId}, client=${clientStr}, index=${feedbackIndex}`);
         }
-        if (!feedback.feedbackHash) {
+        if (!feedback.sealHash) {
           throw new Error('Feedback hash not available from indexer. Please provide sealHash parameter.');
         }
-        feedbackHash = feedback.feedbackHash;
+        feedbackHash = feedback.sealHash;
       }
 
       const result = await sdk.revokeFeedback(assetPubkey, feedbackIndex, feedbackHash, { skipSend });
@@ -607,10 +607,10 @@ export const writeOperationHandlers: Record<string, (args: unknown) => Promise<u
         if (!feedback) {
           throw new Error(`Feedback not found: agent=${rawId}, client=${client}, index=${feedbackIndex}`);
         }
-        if (!feedback.feedbackHash) {
+        if (!feedback.sealHash) {
           throw new Error('Feedback hash not available from indexer. Please provide sealHash parameter.');
         }
-        feedbackHash = feedback.feedbackHash;
+        feedbackHash = feedback.sealHash;
       }
 
       const result = await sdk.appendResponse(

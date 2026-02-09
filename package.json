@@ -1,6 +1,6 @@
 {
   "name": "@quantulabs/8004-mcp",
-  "version": "0.2.3",
+  "version": "0.3.0",
   "description": "Multi-chain MCP for 8004 Agent Registry Standard (Solana + EVM)",
   "type": "module",
   "main": "dist/index.js",
@@ -38,7 +38,7 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",
     "@solana/web3.js": "^1.95.0",
-    "8004-solana": "^0.5.3",
+    "8004-solana": "^0.6.1",
     "agent0-sdk": "^1.4.2",
     "argon2": "^0.44.0",
     "better-sqlite3": "^11.0.0",

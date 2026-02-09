@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.3.0] - 2026-02-09
+
+### Changed
+- Bumped `8004-solana` SDK dependency from ^0.5.3 to ^0.6.1
+
+### Fixed
+- Feedback revoke and response tools now correctly read SEAL hash from indexer
+
 ## [0.2.3] - 2026-02-03
 
 ### Added
