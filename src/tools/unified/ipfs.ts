@@ -385,9 +385,9 @@ export const ipfsHandlers: Record<string, (args: unknown) => Promise<unknown>> =
     };
     const ext = extensions[mimeType] || '.bin';
 
-    // Get Pinata JWT from config
-    const config = globalState.ipfs.getConfig();
-    if (!config?.pinataJwt) {
+    // Get Pinata JWT for direct upload
+    const pinataJwt = globalState.ipfs.getPinataJwt();
+    if (!pinataJwt) {
       throw new Error('Pinata JWT not configured. Images require Pinata.');
     }
 
@@ -401,7 +401,7 @@ export const ipfsHandlers: Record<string, (args: unknown) => Promise<unknown>> =
     const response = await fetch('https://api.pinata.cloud/pinning/pinFileToIPFS', {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${config.pinataJwt}`,
+        Authorization: `Bearer ${pinataJwt}`,
       },
       body: formData,
     });

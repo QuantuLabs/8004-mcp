@@ -8,6 +8,33 @@ import type { SolanaChainProvider } from '../../chains/solana/provider.js';
 import type { NetworkMode } from '../../config/defaults.js';
 import { getWalletStore } from '../../core/wallet/index.js';
 
+// URL validation for RPC/indexer endpoints
+function validateEndpointUrl(urlString: string, label: string): void {
+  let url: URL;
+  try {
+    url = new URL(urlString);
+  } catch {
+    throw new Error(`Invalid ${label} URL format`);
+  }
+
+  if (!['http:', 'https:', 'ws:', 'wss:'].includes(url.protocol)) {
+    throw new Error(`Invalid ${label} URL scheme: ${url.protocol}. Only http/https/ws/wss allowed.`);
+  }
+
+  const hostname = url.hostname.toLowerCase();
+  const blockedHosts = ['localhost', '127.0.0.1', '::1', '0.0.0.0', 'metadata.google.internal', '169.254.169.254'];
+  if (blockedHosts.includes(hostname)) {
+    throw new Error(`${label} URL points to blocked host: ${hostname}`);
+  }
+
+  const privatePatterns = [/^127\./, /^10\./, /^172\.(1[6-9]|2[0-9]|3[0-1])\./, /^192\.168\./, /^169\.254\./];
+  for (const p of privatePatterns) {
+    if (p.test(hostname)) {
+      throw new Error(`${label} URL points to private IP: ${hostname}`);
+    }
+  }
+}
+
 export const configTools: Tool[] = [
   {
     name: 'config_get',
@@ -163,12 +190,14 @@ export const configHandlers: Record<string, (args: unknown) => Promise<unknown>>
 
       const rpcUrl = readString(input, 'rpcUrl');
       if (rpcUrl) {
+        validateEndpointUrl(rpcUrl, 'RPC');
         updates.rpcUrl = rpcUrl;
         changes.push(`RPC URL: ${rpcUrl}`);
       }
 
       const indexerUrl = readString(input, 'indexerUrl');
       if (indexerUrl) {
+        validateEndpointUrl(indexerUrl, 'Indexer');
         updates.indexerUrl = indexerUrl;
         changes.push(`Indexer URL: ${indexerUrl}`);
       }

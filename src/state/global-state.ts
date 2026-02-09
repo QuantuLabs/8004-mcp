@@ -407,7 +407,7 @@ class GlobalState {
     return this._chainRegistry.require(chainId);
   }
 
-  // Snapshot for debugging/status
+  // Snapshot for debugging/status (redacts sensitive values)
   getSnapshot(): IGlobalStateSnapshot {
     const chains = this._chainRegistry.getAll();
     const defaultChain = this._chainRegistry.getDefault();
@@ -424,10 +424,35 @@ class GlobalState {
       cacheStats = { total: 0, byChain: {}, dbSize: '0 B' };
     }
 
-    const ipfsConfig = this._ipfsService.getConfig();
+    // Redact sensitive fields from config before exposing
+    const redactedConfig: IEnvConfig = {
+      solana: {
+        cluster: this._config.solana.cluster,
+        rpcUrl: this._config.solana.rpcUrl,
+        privateKey: this._config.solana.privateKey ? '[REDACTED]' : undefined,
+      },
+      evm: {
+        privateKey: this._config.evm.privateKey ? '[REDACTED]' : undefined,
+      },
+      indexer: {
+        url: this._config.indexer.url,
+        apiKey: this._config.indexer.apiKey ? '[REDACTED]' : undefined,
+        enabled: this._config.indexer.enabled,
+        fallback: this._config.indexer.fallback,
+        forceOnChain: this._config.indexer.forceOnChain,
+      },
+      ipfs: {
+        pinataJwt: this._config.ipfs.pinataJwt ? '[REDACTED]' : undefined,
+        ipfsUrl: this._config.ipfs.ipfsUrl,
+        filecoinEnabled: this._config.ipfs.filecoinEnabled,
+        filecoinPrivateKey: this._config.ipfs.filecoinPrivateKey ? '[REDACTED]' : undefined,
+      },
+      crawlerTimeoutMs: this._config.crawlerTimeoutMs,
+      networkMode: this._config.networkMode,
+    };
 
     return {
-      config: this._config,
+      config: redactedConfig,
       networkMode: this._networkMode,
       chains: {
         registered: chains.map(c => c.chainId),
@@ -445,9 +470,9 @@ class GlobalState {
       },
       ipfs: {
         configured: this._ipfsService.isConfigured(),
-        hasPinata: !!ipfsConfig?.pinataJwt,
-        hasIpfsNode: !!ipfsConfig?.url,
-        hasFilecoin: !!ipfsConfig?.filecoinPinEnabled,
+        hasPinata: !!this._config.ipfs.pinataJwt,
+        hasIpfsNode: !!this._config.ipfs.ipfsUrl,
+        hasFilecoin: !!this._config.ipfs.filecoinEnabled,
       },
       crawlerTimeoutMs: this._crawlerTimeoutMs,
     };

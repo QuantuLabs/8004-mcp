@@ -346,9 +346,7 @@ const _walletHandlers: Record<string, (args: unknown) => Promise<unknown>> = {
       chainType: result.chainType,
       address: result.address,
       status: 'unlocked',
-      sessionToken: result.sessionToken,
       message: result.message,
-      hint: 'Use sessionToken for subsequent operations instead of password.',
     });
   },
 

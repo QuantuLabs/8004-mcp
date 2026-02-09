@@ -58,10 +58,22 @@ export class IPFSService implements IIPFSService {
   }
 
   /**
-   * Get current configuration (for debugging/status)
+   * Get current configuration (redacted for safe display)
    */
   getConfig(): IPFSClientConfig | undefined {
-    return this._config ? { ...this._config } : undefined;
+    if (!this._config) return undefined;
+    return {
+      ...this._config,
+      pinataJwt: this._config.pinataJwt ? '[REDACTED]' : undefined,
+      filecoinPrivateKey: this._config.filecoinPrivateKey ? '[REDACTED]' : undefined,
+    };
+  }
+
+  /**
+   * Check if Pinata JWT is configured (without exposing the value)
+   */
+  hasPinataJwt(): boolean {
+    return !!this._config?.pinataJwt;
   }
 
   /**
@@ -106,6 +118,14 @@ export class IPFSService implements IIPFSService {
   async getRegistrationFile(cid: string): Promise<RegistrationFile> {
     const client = this.getClient();
     return client.getRegistrationFile(cid);
+  }
+
+  /**
+   * Get raw Pinata JWT for internal use (e.g., direct API calls).
+   * Do NOT expose this value in tool responses.
+   */
+  getPinataJwt(): string | undefined {
+    return this._config?.pinataJwt;
   }
 
   /**
