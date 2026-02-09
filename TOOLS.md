@@ -38,12 +38,37 @@ Complete list of all MCP tools available in @quantulabs/8004-mcp.
 |------|-------------|
 | `agent_get` | Get agent details by ID |
 | `agent_exists` | Check if agent exists on-chain |
-| `agent_search` | Search agents with filters |
+| `agent_search` | Search agents with filters (name, OASF skills/domains, keyword, feedback, capabilities) |
 | `agent_list_by_owner` | List all agents owned by an address |
 | `agent_register` | Register a new agent |
 | `agent_transfer` | Transfer agent ownership |
 | `agent_uri_update` | Update agent metadata URI |
 | `agent_metadata_set` | Set on-chain metadata key-value (Solana only) |
+
+### agent_search Parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `query` | string | General search query (name + description) |
+| `nameQuery` | string | Search by agent name |
+| `descriptionQuery` | string | Search by description |
+| `endpointQuery` | string | Search by MCP/A2A endpoint |
+| `searchMode` | string | `name`, `description`, `endpoint`, or `all` (default) |
+| `owner` | string | Filter by owner address |
+| `chain` | string | Chain prefix (`sol`, `base`, `eth`, `all`) |
+| `mcpTools` | string[] | Filter by MCP tools |
+| `a2aSkills` | string[] | Filter by A2A skills |
+| `oasfSkills` | string[] | Filter by OASF skills (e.g., `text-generation`) |
+| `oasfDomains` | string[] | Filter by OASF domains (e.g., `finance`) |
+| `keyword` | string | Semantic keyword search |
+| `minFeedbackCount` | number | Minimum feedback count |
+| `minFeedbackValue` | number | Minimum average feedback value |
+| `active` | boolean | Filter by active status |
+| `x402support` | boolean | Filter by x402 payment support |
+| `hasMcp` | boolean | Filter by has MCP endpoint |
+| `hasA2a` | boolean | Filter by has A2A endpoint |
+| `limit` | number | Max results (default: 20, max: 100) |
+| `offset` | number | Pagination offset |
 
 ## Feedback
 

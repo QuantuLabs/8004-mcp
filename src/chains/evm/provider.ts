@@ -7,7 +7,7 @@ import {
   REPUTATION_REGISTRY_ABI,
   type SDKConfig,
 } from 'agent0-sdk';
-import type { AgentSummary, Feedback } from 'agent0-sdk';
+import type { AgentSummary, Feedback, SearchFilters } from 'agent0-sdk';
 import type {
   IChainProvider,
   IChainConfig,
@@ -16,6 +16,7 @@ import type {
 } from '../../core/interfaces/chain-provider.js';
 import type {
   IAgent,
+  IAgentSummary,
   ISearchParams,
   ISearchResult,
   ChainType,
@@ -189,9 +190,24 @@ export class EVMChainProvider implements IChainProvider {
       nameFilter = params.descriptionQuery;
     }
 
-    // Endpoint search: filter by mcp/a2a capabilities (AgentSummary doesn't have endpoint URLs)
-    // endpointQuery can match against mcpTools, a2aSkills, or require mcp/a2a support
+    // Endpoint search: filter by mcp/a2a capabilities
     const endpointFilter = (mode === 'endpoint' || mode === 'all') ? params.endpointQuery : undefined;
+
+    // Build SDK SearchFilters
+    const sdkFilters: SearchFilters = {
+      owners: params.owner ? [params.owner] : undefined,
+      name: nameFilter,
+      mcpTools: params.mcpTools,
+      a2aSkills: params.a2aSkills,
+      oasfSkills: params.oasfSkills,
+      oasfDomains: params.oasfDomains,
+      active: params.active,
+      x402support: params.x402support,
+      hasMCP: params.hasMcp,
+      hasA2A: params.hasA2a,
+      keyword: params.keyword,
+      feedback: params.feedback,
+    };
 
     try {
       // Prefer subgraph for reads (faster, no RPC calls)
@@ -199,21 +215,7 @@ export class EVMChainProvider implements IChainProvider {
       if (subgraph) {
         // Fetch more if we need to filter client-side
         const fetchLimit = endpointFilter ? Math.min(limit * 3, 100) : limit;
-        const agents = await subgraph.searchAgents(
-          {
-            owners: params.owner ? [params.owner as `0x${string}`] : undefined,
-            name: nameFilter,
-            // Advanced SDK filters
-            mcpTools: params.mcpTools,
-            a2aSkills: params.a2aSkills,
-            active: params.active,
-            x402support: params.x402support,
-            mcp: params.hasMcp,
-            a2a: params.hasA2a,
-          },
-          fetchLimit,
-          offset
-        );
+        const agents = await subgraph.searchAgents(sdkFilters, fetchLimit, offset);
 
         // Apply client-side filtering if needed (using centralized helper)
         let filteredAgents = agents;
@@ -221,8 +223,8 @@ export class EVMChainProvider implements IChainProvider {
           filteredAgents = agents.filter((a: AgentSummary) =>
             matchesSearchFilter(
               {
-                mcpEndpoint: a.mcp ? 'mcp' : undefined,
-                a2aEndpoint: a.a2a ? 'a2a' : undefined,
+                mcpEndpoint: a.mcp || undefined,
+                a2aEndpoint: a.a2a || undefined,
                 mcpTools: a.mcpTools,
                 a2aSkills: a.a2aSkills,
                 mcpPrompts: a.mcpPrompts,
@@ -237,17 +239,7 @@ export class EVMChainProvider implements IChainProvider {
         const paginatedAgents = filteredAgents.slice(0, limit);
 
         return {
-          results: paginatedAgents.map((a: AgentSummary) => ({
-            id: extractTokenId(a.agentId),
-            globalId: toGlobalId(this.chainPrefix, extractTokenId(a.agentId), String(this.config.chainId)),
-            chainType: 'evm' as const,
-            chainPrefix: this.chainPrefix,
-            name: a.name ?? `Agent #${a.agentId}`,
-            owner: a.owners?.[0] ?? '',
-            // Include capability flags for better search results
-            mcp: a.mcp,
-            a2a: a.a2a,
-          })),
+          results: paginatedAgents.map((a: AgentSummary) => this.mapAgentSummary(a)),
           total: filteredAgents.length,
           hasMore: filteredAgents.length > limit,
           offset,
@@ -255,106 +247,21 @@ export class EVMChainProvider implements IChainProvider {
         };
       }
 
-      // Fallback to SDK (may use RPC)
+      // Fallback to SDK (returns flat AgentSummary[])
       const sdk = this.getSdk();
+      const agents = await sdk.searchAgents(sdkFilters, {
+        sort: params.orderBy ? [`${params.orderBy}:${params.orderDir ?? 'desc'}`] : undefined,
+      });
 
-      // SDK uses cursor-based pagination. When cursor is provided, use it directly
-      // for efficient O(1) pagination. Without cursor, offset requires O(N) iteration.
-      if (params.cursor) {
-        // Efficient path: use provided cursor directly
-        const results = await sdk.searchAgents(
-          {
-            owners: params.owner ? [params.owner] : undefined,
-            name: nameFilter,
-            // Advanced SDK filters
-            mcpTools: params.mcpTools,
-            a2aSkills: params.a2aSkills,
-            active: params.active,
-            x402support: params.x402support,
-            mcp: params.hasMcp,
-            a2a: params.hasA2a,
-          },
-          {
-            pageSize: limit,
-            cursor: params.cursor,
-          }
-        );
-
-        return {
-          results: results.items.map((a: AgentSummary) => ({
-            id: extractTokenId(a.agentId),
-            globalId: toGlobalId(this.chainPrefix, extractTokenId(a.agentId), String(this.config.chainId)),
-            chainType: 'evm' as const,
-            chainPrefix: this.chainPrefix,
-            name: a.name ?? `Agent #${a.agentId}`,
-            owner: a.owners?.[0] ?? '',
-          })),
-          total: results.items.length,
-          hasMore: !!results.nextCursor,
-          offset,
-          limit,
-          cursor: results.nextCursor, // Return cursor for next page
-        };
-      }
-
-      // Legacy path: offset-based pagination (O(N) for large offsets)
-      // Warning logged for deep offsets to encourage cursor usage
-      if (offset > 100) {
-        console.warn(
-          `[EVMChainProvider] Large offset (${offset}) with SDK pagination is O(N). ` +
-          `Use cursor-based pagination for better performance.`
-        );
-      }
-
-      let cursor: string | undefined;
-      let allItems: AgentSummary[] = [];
-
-      // Fetch pages until we have enough items to satisfy offset + limit
-      do {
-        const results = await sdk.searchAgents(
-          {
-            owners: params.owner ? [params.owner] : undefined,
-            name: nameFilter,
-            // Advanced SDK filters
-            mcpTools: params.mcpTools,
-            a2aSkills: params.a2aSkills,
-            active: params.active,
-            x402support: params.x402support,
-            mcp: params.hasMcp,
-            a2a: params.hasA2a,
-          },
-          {
-            pageSize: Math.min(100, limit + offset), // Fetch more to handle offset
-            cursor,
-          }
-        );
-
-        allItems = allItems.concat(results.items);
-        cursor = results.nextCursor;
-
-        // If we have enough items or no more pages, stop
-        if (allItems.length >= offset + limit || !cursor) {
-          break;
-        }
-      } while (cursor);
-
-      // Apply offset by slicing
-      const paginatedItems = allItems.slice(offset, offset + limit);
+      // Apply client-side offset/limit pagination
+      const paginatedAgents = agents.slice(offset, offset + limit);
 
       return {
-        results: paginatedItems.map((a: AgentSummary) => ({
-          id: extractTokenId(a.agentId),
-          globalId: toGlobalId(this.chainPrefix, extractTokenId(a.agentId), String(this.config.chainId)),
-          chainType: 'evm' as const,
-          chainPrefix: this.chainPrefix,
-          name: a.name ?? `Agent #${a.agentId}`,
-          owner: a.owners?.[0] ?? '',
-        })),
-        total: allItems.length,
-        hasMore: allItems.length > offset + limit || !!cursor,
+        results: paginatedAgents.map((a: AgentSummary) => this.mapAgentSummary(a)),
+        total: agents.length,
+        hasMore: agents.length > offset + limit,
         offset,
         limit,
-        cursor, // Return cursor for efficient next-page fetching
       };
     } catch (err) {
       console.warn('EVMChainProvider.searchAgents error:', err);
@@ -366,6 +273,27 @@ export class EVMChainProvider implements IChainProvider {
         limit,
       };
     }
+  }
+
+  private mapAgentSummary(a: AgentSummary): IAgentSummary & Record<string, unknown> {
+    return {
+      id: extractTokenId(a.agentId),
+      globalId: toGlobalId(this.chainPrefix, extractTokenId(a.agentId), String(this.config.chainId)),
+      chainType: 'evm' as const,
+      chainPrefix: this.chainPrefix,
+      name: a.name ?? `Agent #${a.agentId}`,
+      owner: a.owners?.[0] ?? '',
+      mcp: a.mcp,
+      a2a: a.a2a,
+      web: a.web,
+      email: a.email,
+      feedbackCount: a.feedbackCount,
+      averageValue: a.averageValue,
+      oasfSkills: a.oasfSkills,
+      oasfDomains: a.oasfDomains,
+      createdAt: a.createdAt,
+      updatedAt: a.updatedAt,
+    };
   }
 
   // Feedback Operations
@@ -597,24 +525,22 @@ export class EVMChainProvider implements IChainProvider {
     try {
       const sdk = this.getSdk();
 
-      // Use searchAgentsByReputation with sorting by reputation
-      const results = await sdk.searchAgentsByReputation(
+      // Use unified searchAgents with feedback filters
+      const agents = await sdk.searchAgents(
         {
-          minAverageValue: options?.minFeedbacks ? 1 : undefined,
+          feedback: {
+            minCount: options?.minFeedbacks ?? 1,
+          },
         },
         {
-          pageSize: limit + offset, // Fetch enough to skip offset
-          sort: ['createdAt:desc'], // Sort by newest (SDK doesn't support averageValue sort)
-          includeRevoked: false,
+          sort: ['averageValue:desc'],
         }
       );
 
-      // Skip offset and take limit
-      const agents = results.items.slice(offset, offset + limit);
-
       // Fetch reputation for each agent to build leaderboard entries
+      const paginatedAgents = agents.slice(offset, offset + limit);
       const entries = await Promise.all(
-        agents.map(async (agent, index) => {
+        paginatedAgents.map(async (agent, index) => {
           const reputation = await this.getReputationSummary(agent.agentId);
           return {
             rank: offset + index + 1,
@@ -644,8 +570,8 @@ export class EVMChainProvider implements IChainProvider {
 
       return {
         entries,
-        total: results.items.length,
-        hasMore: !!results.nextCursor,
+        total: agents.length,
+        hasMore: agents.length > offset + limit,
       };
     } catch (err) {
       console.warn('EVMChainProvider.getLeaderboard error:', err);

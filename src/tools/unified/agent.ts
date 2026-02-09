@@ -110,6 +110,16 @@ export const agentTools: Tool[] = [
           items: { type: 'string' },
           description: 'Filter by A2A skills (agent must have ALL listed skills)',
         },
+        oasfSkills: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Filter by OASF skills (e.g., text-generation, image-classification)',
+        },
+        oasfDomains: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Filter by OASF domains (e.g., finance, healthcare)',
+        },
         active: {
           type: 'boolean',
           description: 'Filter by active status (true=active only, false=inactive only)',
@@ -125,6 +135,18 @@ export const agentTools: Tool[] = [
         hasA2a: {
           type: 'boolean',
           description: 'Filter by has A2A endpoint',
+        },
+        keyword: {
+          type: 'string',
+          description: 'Semantic keyword search across agent name, description, and capabilities',
+        },
+        minFeedbackCount: {
+          type: 'number',
+          description: 'Minimum feedback count',
+        },
+        minFeedbackValue: {
+          type: 'number',
+          description: 'Minimum average feedback value',
         },
         limit: {
           type: 'number',
@@ -242,10 +264,23 @@ export const agentHandlers: Record<string, (args: unknown) => Promise<unknown>> 
     // Advanced SDK filters (EVM)
     const mcpTools = readStringArray(input, 'mcpTools');
     const a2aSkills = readStringArray(input, 'a2aSkills');
+    const oasfSkills = readStringArray(input, 'oasfSkills');
+    const oasfDomains = readStringArray(input, 'oasfDomains');
     const active = readBoolean(input, 'active');
     const x402support = readBoolean(input, 'x402support');
     const hasMcp = readBoolean(input, 'hasMcp');
     const hasA2a = readBoolean(input, 'hasA2a');
+    const keyword = readString(input, 'keyword');
+    const minFeedbackCount = readNumber(input, 'minFeedbackCount');
+    const minFeedbackValue = readNumber(input, 'minFeedbackValue');
+
+    // Build feedback filters if specified
+    const feedback = (minFeedbackCount !== undefined || minFeedbackValue !== undefined)
+      ? {
+          ...(minFeedbackCount !== undefined ? { minCount: minFeedbackCount } : {}),
+          ...(minFeedbackValue !== undefined ? { minValue: minFeedbackValue } : {}),
+        }
+      : undefined;
 
     // Build search params with specific field queries
     const searchParams = {
@@ -263,10 +298,14 @@ export const agentHandlers: Record<string, (args: unknown) => Promise<unknown>> 
       // Advanced SDK filters
       mcpTools,
       a2aSkills,
+      oasfSkills,
+      oasfDomains,
       active,
       x402support,
       hasMcp,
       hasA2a,
+      keyword,
+      feedback,
     };
 
     // If specific chain requested (not "all"), search that chain only

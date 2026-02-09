@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.3.1] - 2026-02-09
+
+### Added
+- New search filters: `oasfSkills`, `oasfDomains`, `keyword` (semantic search), `minFeedbackCount`, `minFeedbackValue`
+- New fields in search results: `web`, `email`, `createdAt`, `updatedAt`, `feedbackCount`, `averageValue`, `oasfSkills`, `oasfDomains`
+- Polygon Mainnet (chain 137) auto-configured from SDK defaults
+
+### Changed
+- Upgraded `agent0-sdk` from ^1.4.2 to ^1.5.2
+- Leaderboard now uses unified `searchAgents` with `FeedbackFilters` (replaces removed `searchAgentsByReputation`)
+- EVM search returns flat array from SDK (cursor-based pagination removed upstream)
+- `AgentSummary.mcp` and `.a2a` are now endpoint URL strings (previously boolean flags)
+
 ## [0.3.0] - 2026-02-09
 
 ### Security
