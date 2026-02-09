@@ -2,7 +2,7 @@
 
 export type ChainType = 'solana' | 'evm';
 
-export type ChainPrefix = 'sol' | 'eth' | 'base' | 'arb' | 'poly' | 'op';
+export type ChainPrefix = 'sol' | 'eth' | 'base' | 'poly' | 'bsc' | 'monad';
 
 export interface IGlobalId {
   prefix: ChainPrefix;
@@ -167,7 +167,7 @@ export const CHAIN_PREFIX_PRIORITY: Record<ChainPrefix, number> = {
   sol: 1,
   base: 2,
   eth: 3,
-  arb: 4,
-  poly: 5,
-  op: 6,
+  poly: 4,
+  bsc: 5,
+  monad: 6,
 };

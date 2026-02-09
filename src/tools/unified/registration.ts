@@ -9,6 +9,7 @@ import {
 } from '../../core/parsers/common.js';
 import { successResponse } from '../../core/serializers/common.js';
 import { globalState } from '../../state/global-state.js';
+import type { ChainPrefix } from '../../core/interfaces/agent.js';
 import type { SolanaChainProvider } from '../../chains/solana/provider.js';
 import type { EVMChainProvider } from '../../chains/evm/provider.js';
 import { PublicKey, LAMPORTS_PER_SOL } from '@solana/web3.js';
@@ -295,7 +296,7 @@ async function registerEvmAgent(params: {
 }): Promise<unknown> {
   const { name, description, image, tokenUri, mcpEndpoint, a2aEndpoint, chainPrefix } = params;
 
-  const provider = globalState.chains.getByPrefix(chainPrefix as 'eth' | 'base' | 'arb' | 'poly' | 'op') as EVMChainProvider | null;
+  const provider = globalState.chains.getByPrefix(chainPrefix as ChainPrefix) as EVMChainProvider | null;
   if (!provider) {
     throw new Error(`EVM provider not available for chain: ${chainPrefix}`);
   }
@@ -438,7 +439,7 @@ async function estimateSolanaCost(): Promise<unknown> {
 
 // Cost estimation for EVM
 async function estimateEvmCost(chainPrefix: string): Promise<unknown> {
-  const provider = globalState.chains.getByPrefix(chainPrefix as 'eth' | 'base' | 'arb' | 'poly' | 'op') as EVMChainProvider | null;
+  const provider = globalState.chains.getByPrefix(chainPrefix as ChainPrefix) as EVMChainProvider | null;
   if (!provider) {
     throw new Error(`EVM provider not available for chain: ${chainPrefix}`);
   }

@@ -19,7 +19,7 @@ function invalidateSolanaSDK(): void {
 
 // Helper to invalidate all EVM SDKs after wallet state change
 function invalidateEvmSDKs(): void {
-  const evmPrefixes = ['eth', 'base', 'arb', 'poly', 'op'] as const;
+  const evmPrefixes = ['eth', 'base', 'poly', 'bsc', 'monad'] as const;
   for (const prefix of evmPrefixes) {
     const provider = globalState.chains.getByPrefix(prefix) as EVMChainProvider | null;
     if (provider) {

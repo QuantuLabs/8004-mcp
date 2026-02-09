@@ -266,7 +266,7 @@ export const feedbackHandlers: Record<string, (args: unknown) => Promise<unknown
       provider = globalState.chains.getByPrefix(parsed.prefix);
       rawId = parsed.rawId;
     } else if (chainPrefix) {
-      provider = globalState.chains.getByPrefix(chainPrefix as 'sol' | 'base' | 'eth' | 'arb' | 'poly' | 'op');
+      provider = globalState.chains.getByPrefix(chainPrefix as ChainPrefix);
     } else {
       provider = globalState.chains.getDefault();
     }
@@ -300,7 +300,7 @@ export const feedbackHandlers: Record<string, (args: unknown) => Promise<unknown
       provider = globalState.chains.getByPrefix(parsed.prefix);
       rawId = parsed.rawId;
     } else if (chainPrefix) {
-      provider = globalState.chains.getByPrefix(chainPrefix as 'sol' | 'base' | 'eth' | 'arb' | 'poly' | 'op');
+      provider = globalState.chains.getByPrefix(chainPrefix as ChainPrefix);
     } else {
       provider = globalState.chains.getDefault();
     }

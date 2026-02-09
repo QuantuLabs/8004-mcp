@@ -4,6 +4,7 @@ import type { Tool } from '@modelcontextprotocol/sdk/types.js';
 import { getArgs, readString, readNumber, readBoolean } from '../../core/parsers/common.js';
 import { successResponse, errorResponse } from '../../core/serializers/common.js';
 import { globalState } from '../../state/global-state.js';
+import type { ChainPrefix } from '../../core/interfaces/agent.js';
 import type { SolanaChainProvider } from '../../chains/solana/provider.js';
 import type { NetworkMode } from '../../config/defaults.js';
 import { getWalletStore } from '../../core/wallet/index.js';
@@ -311,7 +312,7 @@ export const configHandlers: Record<string, (args: unknown) => Promise<unknown>>
 
     for (const prefix of networkStatus.deployedChains) {
       try {
-        const provider = globalState.chains.getByPrefix(prefix as 'sol' | 'eth' | 'base' | 'arb' | 'poly' | 'op');
+        const provider = globalState.chains.getByPrefix(prefix as ChainPrefix);
         if (provider) {
           const start = Date.now();
           chainHealth[prefix] = { status: 'ok', latency: Date.now() - start };

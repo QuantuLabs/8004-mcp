@@ -1,10 +1,9 @@
 // Default configuration values and network configs
-// NOTE: Registry addresses and subgraph URLs come from the SDKs (agent0-sdk, 8004-solana)
-// This file only contains RPC URLs, block explorers, and chain metadata
+// Registry addresses are hardcoded from subgraph deployment configs (source of truth)
+// Subgraph URLs come from agent0-sdk where available
 
 import type { ChainType, ChainPrefix } from '../core/interfaces/agent.js';
 import {
-  DEFAULT_REGISTRIES as EVM_DEFAULT_REGISTRIES,
   DEFAULT_SUBGRAPH_URLS as EVM_DEFAULT_SUBGRAPH_URLS,
 } from 'agent0-sdk';
 import {
@@ -35,19 +34,7 @@ export interface ChainNetworkConfig {
   blockExplorer?: string;
 }
 
-// Helper to get EVM registries from SDK (source of truth)
-function getEvmRegistries(chainId: number): { identity: string; reputation: string } {
-  const sdkRegistries = EVM_DEFAULT_REGISTRIES[chainId as keyof typeof EVM_DEFAULT_REGISTRIES];
-  if (sdkRegistries) {
-    return {
-      identity: sdkRegistries.IDENTITY || '',
-      reputation: sdkRegistries.REPUTATION || '',
-    };
-  }
-  return { identity: '', reputation: '' };
-}
-
-// Helper to get EVM subgraph URL from SDK (source of truth)
+// Helper to get EVM subgraph URL from SDK (optional, returns '' for unsupported chains)
 function getEvmSubgraphUrl(chainId: number): string {
   return EVM_DEFAULT_SUBGRAPH_URLS[chainId as keyof typeof EVM_DEFAULT_SUBGRAPH_URLS] || '';
 }
@@ -72,9 +59,24 @@ export interface ChainConfig {
   mainnet: ChainNetworkConfig;
 }
 
+// Hardcoded contract addresses from subgraph deployment configs (source of truth)
+const MAINNET_REGISTRIES = {
+  identity: '0x8004A169FB4a3325136EB29fA0ceB6D2e539a432',
+  reputation: '0x8004BAa17C55a88189AE136b182e5fdA19dE9b63',
+};
+
+const TESTNET_REGISTRIES = {
+  identity: '0x8004A818BFB912233c491871b3d84c89A494BD9e',
+  reputation: '0x8004B663056A597Dffe9eCcC1965A193B7388713',
+};
+
+const POLYGON_AMOY_REGISTRIES = {
+  identity: '0x8004ad19E14B9e0654f73353e8a0B600D46C2898',
+  reputation: '0x8004B12F4C2B42d00c46479e859C92e39044C930',
+};
+
 // All supported chains with their testnet/mainnet configurations
 export const CHAIN_CONFIGS: Record<ChainPrefix, ChainConfig> = {
-  // Solana - registries and indexer from 8004-solana SDK (source of truth)
   sol: {
     prefix: 'sol',
     chainType: 'solana',
@@ -89,118 +91,109 @@ export const CHAIN_CONFIGS: Record<ChainPrefix, ChainConfig> = {
     mainnet: {
       chainId: 'mainnet-beta',
       rpcUrl: 'https://api.mainnet-beta.solana.com',
-      indexerUrl: '', // TBD - mainnet indexer
-      registries: {
-        identity: '', // TBD - mainnet deployment (will come from SDK when ready)
-        reputation: '',
-        validation: '',
-      },
+      indexerUrl: '',
+      registries: { identity: '', reputation: '' },
       blockExplorer: 'https://explorer.solana.com',
     },
   },
 
-  // Base - registries and subgraph from agent0-sdk (source of truth)
-  base: {
-    prefix: 'base',
-    chainType: 'evm',
-    displayName: 'Base',
-    testnet: {
-      chainId: 84532, // Base Sepolia
-      rpcUrl: 'https://sepolia.base.org',
-      subgraphUrl: getEvmSubgraphUrl(84532),
-      registries: getEvmRegistries(84532),
-      blockExplorer: 'https://sepolia.basescan.org',
-    },
-    mainnet: {
-      chainId: 8453, // Base Mainnet
-      rpcUrl: 'https://mainnet.base.org',
-      subgraphUrl: getEvmSubgraphUrl(8453),
-      registries: getEvmRegistries(8453),
-      blockExplorer: 'https://basescan.org',
-    },
-  },
-
-  // Ethereum - registries and subgraph from agent0-sdk (source of truth)
   eth: {
     prefix: 'eth',
     chainType: 'evm',
     displayName: 'Ethereum',
     testnet: {
-      chainId: 11155111, // Sepolia
+      chainId: 11155111,
       rpcUrl: 'https://ethereum-sepolia-rpc.publicnode.com',
       subgraphUrl: getEvmSubgraphUrl(11155111),
-      registries: getEvmRegistries(11155111),
+      registries: TESTNET_REGISTRIES,
       blockExplorer: 'https://sepolia.etherscan.io',
     },
     mainnet: {
-      chainId: 1, // Ethereum Mainnet
+      chainId: 1,
       rpcUrl: 'https://ethereum-rpc.publicnode.com',
       subgraphUrl: getEvmSubgraphUrl(1),
-      registries: getEvmRegistries(1),
+      registries: MAINNET_REGISTRIES,
       blockExplorer: 'https://etherscan.io',
     },
   },
 
-  // Arbitrum - registries and subgraph from agent0-sdk (source of truth)
-  arb: {
-    prefix: 'arb',
+  base: {
+    prefix: 'base',
     chainType: 'evm',
-    displayName: 'Arbitrum',
+    displayName: 'Base',
     testnet: {
-      chainId: 421614, // Arbitrum Sepolia
-      rpcUrl: 'https://sepolia-rollup.arbitrum.io/rpc',
-      subgraphUrl: getEvmSubgraphUrl(421614),
-      registries: getEvmRegistries(421614),
-      blockExplorer: 'https://sepolia.arbiscan.io',
+      chainId: 84532,
+      rpcUrl: 'https://sepolia.base.org',
+      subgraphUrl: getEvmSubgraphUrl(84532),
+      registries: TESTNET_REGISTRIES,
+      blockExplorer: 'https://sepolia.basescan.org',
     },
     mainnet: {
-      chainId: 42161, // Arbitrum One
-      rpcUrl: 'https://arb1.arbitrum.io/rpc',
-      subgraphUrl: getEvmSubgraphUrl(42161),
-      registries: getEvmRegistries(42161),
-      blockExplorer: 'https://arbiscan.io',
+      chainId: 8453,
+      rpcUrl: 'https://mainnet.base.org',
+      subgraphUrl: getEvmSubgraphUrl(8453),
+      registries: MAINNET_REGISTRIES,
+      blockExplorer: 'https://basescan.org',
     },
   },
 
-  // Polygon - registries and subgraph from agent0-sdk (source of truth)
   poly: {
     prefix: 'poly',
     chainType: 'evm',
     displayName: 'Polygon',
     testnet: {
-      chainId: 80002, // Polygon Amoy
+      chainId: 80002,
       rpcUrl: 'https://rpc-amoy.polygon.technology',
       subgraphUrl: getEvmSubgraphUrl(80002),
-      registries: getEvmRegistries(80002),
+      registries: POLYGON_AMOY_REGISTRIES,
       blockExplorer: 'https://amoy.polygonscan.com',
     },
     mainnet: {
-      chainId: 137, // Polygon PoS
+      chainId: 137,
       rpcUrl: 'https://polygon-bor-rpc.publicnode.com',
       subgraphUrl: getEvmSubgraphUrl(137),
-      registries: getEvmRegistries(137),
+      registries: MAINNET_REGISTRIES,
       blockExplorer: 'https://polygonscan.com',
     },
   },
 
-  // Optimism - registries and subgraph from agent0-sdk (source of truth)
-  op: {
-    prefix: 'op',
+  bsc: {
+    prefix: 'bsc',
     chainType: 'evm',
-    displayName: 'Optimism',
+    displayName: 'BSC',
     testnet: {
-      chainId: 11155420, // Optimism Sepolia
-      rpcUrl: 'https://sepolia.optimism.io',
-      subgraphUrl: getEvmSubgraphUrl(11155420),
-      registries: getEvmRegistries(11155420),
-      blockExplorer: 'https://sepolia-optimism.etherscan.io',
+      chainId: 97,
+      rpcUrl: 'https://data-seed-prebsc-1-s1.binance.org:8545',
+      subgraphUrl: getEvmSubgraphUrl(97),
+      registries: TESTNET_REGISTRIES,
+      blockExplorer: 'https://testnet.bscscan.com',
     },
     mainnet: {
-      chainId: 10, // Optimism Mainnet
-      rpcUrl: 'https://mainnet.optimism.io',
-      subgraphUrl: getEvmSubgraphUrl(10),
-      registries: getEvmRegistries(10),
-      blockExplorer: 'https://optimistic.etherscan.io',
+      chainId: 56,
+      rpcUrl: 'https://bsc-dataseed1.binance.org',
+      subgraphUrl: getEvmSubgraphUrl(56),
+      registries: MAINNET_REGISTRIES,
+      blockExplorer: 'https://bscscan.com',
+    },
+  },
+
+  monad: {
+    prefix: 'monad',
+    chainType: 'evm',
+    displayName: 'Monad',
+    testnet: {
+      chainId: 10143,
+      rpcUrl: 'https://testnet-rpc.monad.xyz',
+      subgraphUrl: getEvmSubgraphUrl(10143),
+      registries: TESTNET_REGISTRIES,
+      blockExplorer: 'https://testnet.monadexplorer.com',
+    },
+    mainnet: {
+      chainId: 143,
+      rpcUrl: 'https://rpc.monad.xyz',
+      subgraphUrl: getEvmSubgraphUrl(143),
+      registries: MAINNET_REGISTRIES,
+      blockExplorer: 'https://monadexplorer.com',
     },
   },
 };
@@ -245,11 +238,11 @@ export function getNetworkDisplayName(prefix: ChainPrefix, networkMode: NetworkM
   // For testnet, show the specific testnet name
   const testnetNames: Record<ChainPrefix, string> = {
     sol: 'Devnet',
-    base: 'Sepolia',
     eth: 'Sepolia',
-    arb: 'Sepolia',
+    base: 'Sepolia',
     poly: 'Amoy',
-    op: 'Sepolia',
+    bsc: 'Testnet',
+    monad: 'Testnet',
   };
 
   return `${config.displayName} ${testnetNames[prefix] ?? chainIdStr}`;
@@ -300,23 +293,23 @@ export const SOLANA_PROGRAM_IDS = {
 } as const;
 
 export const EVM_CHAIN_IDS = {
-  base: String(CHAIN_CONFIGS.base.mainnet.chainId),
-  'base-sepolia': String(CHAIN_CONFIGS.base.testnet.chainId),
   ethereum: String(CHAIN_CONFIGS.eth.mainnet.chainId),
   sepolia: String(CHAIN_CONFIGS.eth.testnet.chainId),
-  arbitrum: String(CHAIN_CONFIGS.arb.mainnet.chainId),
-  'arbitrum-sepolia': String(CHAIN_CONFIGS.arb.testnet.chainId),
+  base: String(CHAIN_CONFIGS.base.mainnet.chainId),
+  'base-sepolia': String(CHAIN_CONFIGS.base.testnet.chainId),
   polygon: String(CHAIN_CONFIGS.poly.mainnet.chainId),
   'polygon-amoy': String(CHAIN_CONFIGS.poly.testnet.chainId),
-  optimism: String(CHAIN_CONFIGS.op.mainnet.chainId),
-  'optimism-sepolia': String(CHAIN_CONFIGS.op.testnet.chainId),
+  bsc: String(CHAIN_CONFIGS.bsc.mainnet.chainId),
+  'bsc-testnet': String(CHAIN_CONFIGS.bsc.testnet.chainId),
+  monad: String(CHAIN_CONFIGS.monad.mainnet.chainId),
+  'monad-testnet': String(CHAIN_CONFIGS.monad.testnet.chainId),
 } as const;
 
 export const CHAIN_PREFIX_MAP = {
   sol: 'solana',
   eth: 'evm',
   base: 'evm',
-  arb: 'evm',
   poly: 'evm',
-  op: 'evm',
+  bsc: 'evm',
+  monad: 'evm',
 } as const;

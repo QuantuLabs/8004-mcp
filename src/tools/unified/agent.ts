@@ -12,7 +12,7 @@ import {
 } from '../../core/parsers/common.js';
 import { successResponse } from '../../core/serializers/common.js';
 import { globalState } from '../../state/global-state.js';
-import { parseGlobalId, isValidGlobalId } from '../../core/interfaces/agent.js';
+import { parseGlobalId, isValidGlobalId, type ChainPrefix } from '../../core/interfaces/agent.js';
 import { agentNotFoundError } from '../../core/errors/mcp-error.js';
 
 export const agentTools: Tool[] = [
@@ -202,7 +202,7 @@ export const agentHandlers: Record<string, (args: unknown) => Promise<unknown>> 
       provider = globalState.chains.getByPrefix(parsed.prefix);
       rawId = parsed.rawId;
     } else if (chainPrefix) {
-      provider = globalState.chains.getByPrefix(chainPrefix as 'sol' | 'base' | 'eth' | 'arb' | 'poly' | 'op');
+      provider = globalState.chains.getByPrefix(chainPrefix as ChainPrefix);
     } else {
       provider = globalState.chains.getDefault();
     }
@@ -232,7 +232,7 @@ export const agentHandlers: Record<string, (args: unknown) => Promise<unknown>> 
       provider = globalState.chains.getByPrefix(parsed.prefix);
       rawId = parsed.rawId;
     } else if (chainPrefix) {
-      provider = globalState.chains.getByPrefix(chainPrefix as 'sol' | 'base' | 'eth' | 'arb' | 'poly' | 'op');
+      provider = globalState.chains.getByPrefix(chainPrefix as ChainPrefix);
     } else {
       provider = globalState.chains.getDefault();
     }
@@ -310,7 +310,7 @@ export const agentHandlers: Record<string, (args: unknown) => Promise<unknown>> 
 
     // If specific chain requested (not "all"), search that chain only
     if (chainPrefix && chainPrefix !== 'all') {
-      const provider = globalState.chains.getByPrefix(chainPrefix as 'sol' | 'base' | 'eth' | 'arb' | 'poly' | 'op');
+      const provider = globalState.chains.getByPrefix(chainPrefix as ChainPrefix);
       if (provider) {
         const result = await provider.searchAgents(searchParams);
         // Cache results for future searches
@@ -389,7 +389,7 @@ export const agentHandlers: Record<string, (args: unknown) => Promise<unknown>> 
     const { limit, offset } = parsePagination(input);
 
     const provider = chainPrefix
-      ? globalState.chains.getByPrefix(chainPrefix as 'sol' | 'base' | 'eth' | 'arb' | 'poly' | 'op')
+      ? globalState.chains.getByPrefix(chainPrefix as ChainPrefix)
       : globalState.chains.getDefault();
 
     if (!provider) {

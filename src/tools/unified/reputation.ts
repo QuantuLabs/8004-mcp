@@ -124,7 +124,7 @@ export const reputationHandlers: Record<string, (args: unknown) => Promise<unkno
 
     // If specific chain requested
     if (chainPrefix && chainPrefix !== 'all') {
-      const provider = globalState.chains.getByPrefix(chainPrefix as 'sol' | 'base' | 'eth' | 'arb' | 'poly' | 'op');
+      const provider = globalState.chains.getByPrefix(chainPrefix as ChainPrefix);
       if (provider && provider.getLeaderboard) {
         const result = await provider.getLeaderboard({
           collection,

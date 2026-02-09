@@ -8,33 +8,33 @@ export const EVM_CHAIN_ID_MAP: Record<number, ChainPrefix> = {
   // Mainnets
   1: 'eth',
   8453: 'base',
-  42161: 'arb',
   137: 'poly',
-  10: 'op',
+  56: 'bsc',
+  143: 'monad',
   // Testnets
   11155111: 'eth',
   84532: 'base',
-  421614: 'arb',
   80002: 'poly',
-  11155420: 'op',
+  97: 'bsc',
+  10143: 'monad',
 };
 
 // Prefix to default chainId (mainnet)
 export const PREFIX_TO_MAINNET_CHAIN_ID: Record<string, number> = {
   eth: 1,
   base: 8453,
-  arb: 42161,
   poly: 137,
-  op: 10,
+  bsc: 56,
+  monad: 143,
 };
 
 // Prefix to testnet chainId
 export const PREFIX_TO_TESTNET_CHAIN_ID: Record<string, number> = {
   eth: 11155111,
   base: 84532,
-  arb: 421614,
   poly: 80002,
-  op: 11155420,
+  bsc: 97,
+  monad: 10143,
 };
 
 // Valid EVM chain prefixes (derived from PREFIX_TO_MAINNET_CHAIN_ID)

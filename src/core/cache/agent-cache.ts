@@ -5,7 +5,7 @@ import type { ICacheStats, IUpsertAgent } from './sqlite-store.js';
 import { SyncManager } from './sync-manager.js';
 import type { ISyncManagerConfig, ISyncProgress, ISyncOptions } from './sync-manager.js';
 import type { IDataSource } from './data-source.js';
-import type { IAgentSummary, ISearchParams, ISearchResult } from '../interfaces/agent.js';
+import type { IAgentSummary, ISearchParams, ISearchResult, ChainPrefix } from '../interfaces/agent.js';
 
 export interface IAgentCacheConfig {
   dbPath?: string;
@@ -67,7 +67,7 @@ export class AgentCache {
       id: cached.raw_id,
       globalId: cached.id,
       chainType: cached.chain_type as 'solana' | 'evm',
-      chainPrefix: cached.chain_prefix as 'sol' | 'base' | 'eth' | 'arb' | 'poly' | 'op',
+      chainPrefix: cached.chain_prefix as ChainPrefix,
       name: cached.name,
       description: cached.description ?? undefined,
       image: cached.image ?? undefined,

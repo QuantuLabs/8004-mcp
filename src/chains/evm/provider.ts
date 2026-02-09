@@ -81,9 +81,9 @@ export class EVMChainProvider implements IChainProvider {
     const names: Record<string, Record<number, string>> = {
       base: { 8453: 'Base Mainnet', 84532: 'Base Sepolia' },
       eth: { 1: 'Ethereum Mainnet', 11155111: 'Sepolia' },
-      arb: { 42161: 'Arbitrum One', 421614: 'Arbitrum Sepolia' },
       poly: { 137: 'Polygon', 80002: 'Polygon Amoy' },
-      op: { 10: 'Optimism', 11155420: 'Optimism Sepolia' },
+      bsc: { 56: 'BSC Mainnet', 97: 'BSC Testnet' },
+      monad: { 143: 'Monad Mainnet', 10143: 'Monad Testnet' },
     };
     return names[prefix]?.[chainId] ?? `EVM ${prefix}:${chainId}`;
   }

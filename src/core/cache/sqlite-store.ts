@@ -240,9 +240,9 @@ export class SqliteStore {
     insertChain.run('sol', 'solana', null, 'Solana', 1, 1);
     insertChain.run('base', 'evm', '8453', 'Base', 0, 2);
     insertChain.run('eth', 'evm', '1', 'Ethereum', 0, 3);
-    insertChain.run('arb', 'evm', '42161', 'Arbitrum', 0, 4);
-    insertChain.run('poly', 'evm', '137', 'Polygon', 0, 5);
-    insertChain.run('op', 'evm', '10', 'Optimism', 0, 6);
+    insertChain.run('poly', 'evm', '137', 'Polygon', 0, 4);
+    insertChain.run('bsc', 'evm', '56', 'BSC', 0, 5);
+    insertChain.run('monad', 'evm', '143', 'Monad', 0, 6);
   }
 
   // Agent operations

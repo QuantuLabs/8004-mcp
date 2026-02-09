@@ -12,7 +12,7 @@ import {
 } from '../../core/parsers/common.js';
 import { successResponse } from '../../core/serializers/common.js';
 import { globalState } from '../../state/global-state.js';
-import { parseGlobalId, isValidGlobalId } from '../../core/interfaces/agent.js';
+import { parseGlobalId, isValidGlobalId, type ChainPrefix } from '../../core/interfaces/agent.js';
 import type { IWritableChainProvider } from '../../core/interfaces/chain-provider.js';
 import { isWritableProvider } from '../../core/interfaces/chain-provider.js';
 import {
@@ -260,7 +260,7 @@ export const x402Handlers: Record<
       rawId = parsed.rawId;
     } else if (chainPrefix) {
       provider = globalState.chains.getByPrefix(
-        chainPrefix as 'sol' | 'base' | 'eth' | 'arb' | 'poly' | 'op'
+        chainPrefix as ChainPrefix
       );
     } else {
       provider = globalState.chains.getDefault();
@@ -454,7 +454,7 @@ export const x402Handlers: Record<
       rawId = parsed.rawId;
     } else if (chainPrefix) {
       provider = globalState.chains.getByPrefix(
-        chainPrefix as 'sol' | 'base' | 'eth' | 'arb' | 'poly' | 'op'
+        chainPrefix as ChainPrefix
       );
     } else {
       provider = globalState.chains.getDefault();
@@ -589,7 +589,7 @@ export const x402Handlers: Record<
       rawId = parsed.rawId;
     } else if (chainPrefix) {
       provider = globalState.chains.getByPrefix(
-        chainPrefix as 'sol' | 'base' | 'eth' | 'arb' | 'poly' | 'op'
+        chainPrefix as ChainPrefix
       );
     } else {
       provider = globalState.chains.getDefault();
