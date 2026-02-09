@@ -2,6 +2,11 @@
 
 ## [0.3.0] - 2026-02-09
 
+### Security
+- Redact private keys, JWTs, and API keys from `config_get` output
+- SSRF validation for RPC/indexer URL inputs in `config_set`
+- Removed session token from `wallet_unlock` response
+
 ### Changed
 - Bumped `8004-solana` SDK dependency from ^0.5.3 to ^0.6.1
 
