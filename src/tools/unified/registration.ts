@@ -550,7 +550,7 @@ async function estimateEvmCost(chainPrefix: string): Promise<unknown> {
     },
     note: chainPrefix === 'eth'
       ? 'Ethereum mainnet gas can spike to 50-100 gwei during congestion, increasing costs 10-50x.'
-      : 'L2 chains (Base, Arbitrum, etc.) typically have much lower gas costs than mainnet.',
+      : 'L2/alt chains (Base, BSC, Monad, etc.) typically have much lower gas costs than mainnet.',
     message: `HTTP flow: ${parseFloat(costHttpEth).toFixed(6)} ${nativeToken} (~$${costHttpUsd.toFixed(2)}). IPFS flow: ${parseFloat(costIpfsEth).toFixed(6)} ${nativeToken} (~$${costIpfsUsd.toFixed(2)}) at ${gasPriceGwei.toFixed(2)} gwei.`,
   });
 }
@@ -559,9 +559,9 @@ function getNativeToken(chainPrefix: string): string {
   const tokens: Record<string, string> = {
     eth: 'ETH',
     base: 'ETH',
-    arb: 'ETH',
-    op: 'ETH',
-    poly: 'MATIC',
+    poly: 'POL',
+    bsc: 'BNB',
+    monad: 'MON',
   };
   return tokens[chainPrefix] ?? 'ETH';
 }

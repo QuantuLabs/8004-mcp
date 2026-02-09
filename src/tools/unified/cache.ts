@@ -23,7 +23,7 @@ export const cacheTools: Tool[] = [
         },
         chain: {
           type: 'string',
-          description: 'Filter by chain prefix (sol, base, eth, all)',
+          description: 'Filter by chain prefix (sol, base, eth, poly, bsc, monad, all)',
         },
         limit: {
           type: 'number',

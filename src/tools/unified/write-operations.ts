@@ -39,7 +39,7 @@ export const writeOperationTools: Tool[] = [
         },
         chain: {
           type: 'string',
-          description: 'Chain prefix (sol, eth, base)',
+          description: 'Chain prefix (sol, eth, base, poly, bsc, monad)',
         },
         skipSend: {
           type: 'boolean',

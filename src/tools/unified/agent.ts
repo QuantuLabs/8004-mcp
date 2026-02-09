@@ -28,7 +28,7 @@ export const agentTools: Tool[] = [
         },
         chain: {
           type: 'string',
-          description: 'Chain prefix (sol, base, eth) - optional if using global ID',
+          description: 'Chain prefix (sol, base, eth, poly, bsc, monad) - optional if using global ID',
         },
       },
       required: ['id'],
@@ -89,7 +89,7 @@ export const agentTools: Tool[] = [
         },
         chain: {
           type: 'string',
-          description: 'Filter by chain (sol, base, eth, all)',
+          description: 'Filter by chain (sol, base, eth, poly, bsc, monad, all)',
         },
         minQualityScore: {
           type: 'number',

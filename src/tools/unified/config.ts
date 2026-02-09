@@ -53,7 +53,7 @@ export const configTools: Tool[] = [
       properties: {
         chain: {
           type: 'string',
-          description: 'Default chain to use (sol, base, eth, arb, poly, op)',
+          description: 'Default chain to use (sol, base, eth, poly, bsc, monad)',
         },
         networkMode: {
           type: 'string',
@@ -134,7 +134,7 @@ export const configTools: Tool[] = [
       properties: {
         chain: {
           type: 'string',
-          description: 'Chain to get faucet info for (sol, eth, base, arb, poly, op)',
+          description: 'Chain to get faucet info for (sol, eth, base, poly, bsc, monad)',
         },
       },
     },
@@ -438,15 +438,6 @@ export const configHandlers: Record<string, (args: unknown) => Promise<unknown>>
         ],
         explorerUrl: 'https://sepolia.basescan.org',
       },
-      arb: {
-        name: 'Arbitrum Sepolia',
-        chainId: 421614,
-        faucets: [
-          { name: 'Alchemy Faucet', url: 'https://www.alchemy.com/faucets/arbitrum-sepolia', note: 'Requires account' },
-          { name: 'Triangle Faucet', url: 'https://faucet.triangleplatform.com/arbitrum/sepolia', note: 'Free' },
-        ],
-        explorerUrl: 'https://sepolia.arbiscan.io',
-      },
       poly: {
         name: 'Polygon Amoy',
         chainId: 80002,
@@ -456,20 +447,27 @@ export const configHandlers: Record<string, (args: unknown) => Promise<unknown>>
         ],
         explorerUrl: 'https://amoy.polygonscan.com',
       },
-      op: {
-        name: 'Optimism Sepolia',
-        chainId: 11155420,
+      bsc: {
+        name: 'BSC Testnet',
+        chainId: 97,
         faucets: [
-          { name: 'Superchain Faucet', url: 'https://app.optimism.io/faucet', note: 'Official OP faucet' },
-          { name: 'Alchemy Faucet', url: 'https://www.alchemy.com/faucets/optimism-sepolia', note: 'Requires account' },
+          { name: 'BNB Faucet', url: 'https://www.bnbchain.org/en/testnet-faucet', note: 'Official BNB Chain faucet' },
         ],
-        explorerUrl: 'https://sepolia-optimism.etherscan.io',
+        explorerUrl: 'https://testnet.bscscan.com',
+      },
+      monad: {
+        name: 'Monad Testnet',
+        chainId: 10143,
+        faucets: [
+          { name: 'Monad Faucet', url: 'https://faucet.monad.xyz/', note: 'Official Monad faucet' },
+        ],
+        explorerUrl: 'https://testnet.monadexplorer.com',
       },
     };
 
     const info = faucets[chain];
     if (!info) {
-      return errorResponse(`Unknown chain: ${chain}. Valid: sol, eth, base, arb, poly, op`);
+      return errorResponse(`Unknown chain: ${chain}. Valid: sol, eth, base, poly, bsc, monad`);
     }
 
     // Get wallet address if available
