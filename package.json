@@ -1,6 +1,6 @@
 {
   "name": "@quantulabs/8004-mcp",
-  "version": "0.3.2",
+  "version": "0.3.3",
   "description": "Multi-chain MCP for 8004 Agent Registry Standard (Solana + EVM)",
   "type": "module",
   "main": "dist/index.js",
