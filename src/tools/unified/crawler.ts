@@ -5,6 +5,7 @@ import { getArgs, readString, readNumber } from '../../core/parsers/common.js';
 import { successResponse } from '../../core/serializers/common.js';
 import { globalState } from '../../state/global-state.js';
 import { EndpointCrawler } from '8004-solana';
+import { resolve as dnsResolve } from 'dns/promises';
 
 // SSRF Protection: Validate URLs to prevent internal network scanning
 // NOTE: This validation checks hostname strings only, not resolved IPs.
@@ -49,6 +50,14 @@ const SUSPICIOUS_HOSTNAME_PATTERNS = [
   /^[0-9.]+$/,                         // Pure IP addresses
 ];
 
+function isPrivateIp(ip: string): boolean {
+  for (const pattern of PRIVATE_IP_PATTERNS) {
+    if (pattern.test(ip)) return true;
+  }
+  if (BLOCKED_HOSTNAMES.includes(ip)) return true;
+  return false;
+}
+
 function validateCrawlerUrl(urlString: string): { valid: boolean; error?: string } {
   try {
     const url = new URL(urlString);
@@ -82,6 +91,28 @@ function validateCrawlerUrl(urlString: string): { valid: boolean; error?: string
     return { valid: true };
   } catch {
     return { valid: false, error: 'Invalid URL format' };
+  }
+}
+
+async function validateResolvedIp(urlString: string): Promise<{ valid: boolean; error?: string }> {
+  try {
+    const url = new URL(urlString);
+    const hostname = url.hostname.toLowerCase();
+
+    // Skip resolution for IPs (already checked by validateCrawlerUrl)
+    if (/^[\d.]+$/.test(hostname) || hostname.includes(':')) {
+      return { valid: true };
+    }
+
+    const addresses = await dnsResolve(hostname).catch(() => []);
+    for (const addr of addresses) {
+      if (isPrivateIp(addr)) {
+        return { valid: false, error: `Hostname ${hostname} resolves to private IP: ${addr}` };
+      }
+    }
+    return { valid: true };
+  } catch {
+    return { valid: true }; // Allow if DNS resolution fails (let fetch handle it)
   }
 }
 
@@ -148,14 +179,13 @@ export const crawlerHandlers: Record<string, (args: unknown) => Promise<unknown>
     const url = readString(input, 'url', true);
     const timeoutMs = readNumber(input, 'timeoutMs') ?? globalState.crawlerTimeoutMs;
 
-    // SSRF protection: validate URL before making request
     const validation = validateCrawlerUrl(url);
     if (!validation.valid) {
-      return successResponse({
-        success: false,
-        url,
-        error: validation.error,
-      });
+      return successResponse({ success: false, url, error: validation.error });
+    }
+    const dnsCheck = await validateResolvedIp(url);
+    if (!dnsCheck.valid) {
+      return successResponse({ success: false, url, error: dnsCheck.error });
     }
 
     try {
@@ -180,14 +210,13 @@ export const crawlerHandlers: Record<string, (args: unknown) => Promise<unknown>
     const url = readString(input, 'url', true);
     const timeoutMs = readNumber(input, 'timeoutMs') ?? globalState.crawlerTimeoutMs;
 
-    // SSRF protection: validate URL before making request
     const validation = validateCrawlerUrl(url);
     if (!validation.valid) {
-      return successResponse({
-        success: false,
-        url,
-        error: validation.error,
-      });
+      return successResponse({ success: false, url, error: validation.error });
+    }
+    const dnsCheck = await validateResolvedIp(url);
+    if (!dnsCheck.valid) {
+      return successResponse({ success: false, url, error: dnsCheck.error });
     }
 
     try {
@@ -212,14 +241,13 @@ export const crawlerHandlers: Record<string, (args: unknown) => Promise<unknown>
     const url = readString(input, 'url', true);
     const timeoutMs = readNumber(input, 'timeoutMs') ?? globalState.crawlerTimeoutMs;
 
-    // SSRF protection: validate URL before making request
     const validation = validateCrawlerUrl(url);
     if (!validation.valid) {
-      return successResponse({
-        alive: false,
-        url,
-        error: validation.error,
-      });
+      return successResponse({ alive: false, url, error: validation.error });
+    }
+    const dnsCheck = await validateResolvedIp(url);
+    if (!dnsCheck.valid) {
+      return successResponse({ alive: false, url, error: dnsCheck.error });
     }
 
     try {

@@ -42,7 +42,7 @@ export const VALID_EVM_PREFIXES = Object.keys(PREFIX_TO_MAINNET_CHAIN_ID) as Cha
 
 // Check if a string is a valid EVM prefix
 export function isValidEvmPrefix(str: string): str is ChainPrefix {
-  return VALID_EVM_PREFIXES.includes(str as ChainPrefix);
+  return VALID_EVM_PREFIXES.includes(str.toLowerCase().trim() as ChainPrefix);
 }
 
 export interface ParsedEvmId {

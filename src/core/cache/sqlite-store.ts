@@ -2,7 +2,7 @@
 
 import Database from 'better-sqlite3';
 import { homedir } from 'os';
-import { join } from 'path';
+import { join, resolve } from 'path';
 import { mkdirSync, existsSync } from 'fs';
 import type { IAgentSummary, ISearchParams, ISearchResult, ChainPrefix, ChainType } from '../interfaces/agent.js';
 import { McpError, McpErrorCode } from '../errors/mcp-error.js';
@@ -105,9 +105,20 @@ export class SqliteStore {
       options = { dbPath: options };
     }
 
-    this.dbPath = options?.dbPath ?? join(DEFAULT_CACHE_DIR, DEFAULT_DB_NAME);
+    const rawPath = options?.dbPath ?? join(DEFAULT_CACHE_DIR, DEFAULT_DB_NAME);
+    this.dbPath = resolve(rawPath);
     this.mmapSize = options?.mmapSize ?? DEFAULT_MMAP_SIZE;
     this.cacheSize = options?.cacheSize ?? DEFAULT_CACHE_SIZE;
+
+    // Validate path is within expected directory
+    const expectedBase = resolve(DEFAULT_CACHE_DIR);
+    if (!this.dbPath.startsWith(expectedBase)) {
+      throw new McpError(
+        McpErrorCode.CACHE_INIT_FAILED,
+        `Database path must be within ${expectedBase}`,
+        { dbPath: this.dbPath }
+      );
+    }
 
     // Ensure directory exists
     const dir = this.dbPath.substring(0, this.dbPath.lastIndexOf('/'));
@@ -620,18 +631,8 @@ export class SqliteStore {
   }
 
   private escapeFtsQuery(query: string): string {
-    // Strip FTS5 operators and special syntax
-    let cleaned = query;
-    // Remove column filter syntax (column:)
-    cleaned = cleaned.replace(/\w+:/g, '');
-    // Remove FTS5 boolean/proximity operators
-    cleaned = cleaned.replace(/\b(NEAR|NOT|AND|OR)\b/gi, '');
-    // Remove operator characters: * + - ( )
-    cleaned = cleaned.replace(/[*+\-()]/g, '');
-    // Escape double quotes for phrase search
-    cleaned = cleaned.replace(/"/g, '""');
-    // Trim whitespace
-    cleaned = cleaned.trim();
+    // Strict whitelist: only keep alphanumeric characters and spaces
+    const cleaned = query.replace(/[^a-zA-Z0-9\s]/g, '').trim();
     if (!cleaned) return '""';
     return `"${cleaned}"`;
   }

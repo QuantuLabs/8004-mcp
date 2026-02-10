@@ -8,6 +8,7 @@ import type { ChainPrefix } from '../../core/interfaces/agent.js';
 import type { SolanaChainProvider } from '../../chains/solana/provider.js';
 import type { NetworkMode } from '../../config/defaults.js';
 import { getWalletStore } from '../../core/wallet/index.js';
+import { auditLog } from '../../core/utils/audit-log.js';
 
 // URL validation for RPC/indexer endpoints
 function validateEndpointUrl(urlString: string, label: string): void {
@@ -75,11 +76,11 @@ export const configTools: Tool[] = [
         },
         rpcUrl: {
           type: 'string',
-          description: 'Custom RPC URL for the current chain',
+          description: 'Custom RPC URL for the current chain (requires wallet store to be unlocked)',
         },
         indexerUrl: {
           type: 'string',
-          description: 'Indexer service URL',
+          description: 'Indexer service URL (requires wallet store to be unlocked)',
         },
         useIndexer: {
           type: 'boolean',
@@ -204,14 +205,24 @@ export const configHandlers: Record<string, (args: unknown) => Promise<unknown>>
 
       const rpcUrl = readString(input, 'rpcUrl');
       if (rpcUrl) {
+        const walletStore = getWalletStore();
+        if (!walletStore.isUnlocked()) {
+          throw new Error('Changing RPC URL requires wallet store to be unlocked. Use wallet_store_unlock first.');
+        }
         validateEndpointUrl(rpcUrl, 'RPC');
+        auditLog('config_set_rpc', { rpcUrl });
         updates.rpcUrl = rpcUrl;
         changes.push(`RPC URL: ${rpcUrl}`);
       }
 
       const indexerUrl = readString(input, 'indexerUrl');
       if (indexerUrl) {
+        const walletStore = getWalletStore();
+        if (!walletStore.isUnlocked()) {
+          throw new Error('Changing Indexer URL requires wallet store to be unlocked. Use wallet_store_unlock first.');
+        }
         validateEndpointUrl(indexerUrl, 'Indexer');
+        auditLog('config_set_indexer', { indexerUrl });
         updates.indexerUrl = indexerUrl;
         changes.push(`Indexer URL: ${indexerUrl}`);
       }
@@ -343,7 +354,8 @@ export const configHandlers: Record<string, (args: unknown) => Promise<unknown>>
     // Wallet store status
     let walletStoreStatus: string;
     try {
-      if (!walletStore.isInitialized()) {
+      const initialized = await walletStore.isInitialized();
+      if (!initialized) {
         walletStoreStatus = 'not_initialized';
       } else if (walletStore.isUnlocked()) {
         walletStoreStatus = 'unlocked';

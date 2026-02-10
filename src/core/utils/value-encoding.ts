@@ -202,8 +202,9 @@ export function decodeToDecimalString(value: bigint, valueDecimals: number): str
 
   if (absStr.length <= valueDecimals) {
     const padded = absStr.padStart(valueDecimals, '0');
-    const result = '0.' + padded;
-    return isNegative ? '-' + result : result;
+    const frac = padded.replace(/0+$/, '');
+    const result = frac ? '0.' + frac : '0';
+    return isNegative && result !== '0' ? '-' + result : result;
   }
 
   const intPart = absStr.slice(0, -valueDecimals);

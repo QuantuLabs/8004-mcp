@@ -44,7 +44,6 @@ export function readString(
   return value;
 }
 
-// Alias for optional string (more readable)
 export function readStringOptional(obj: JsonRecord, key: string): string | undefined {
   return readString(obj, key, false);
 }
@@ -206,7 +205,10 @@ export function parseBigIntInput(
     if (!Number.isFinite(value)) {
       throw invalidParamsError(`Parameter ${fieldName} must be a finite number`);
     }
-    return BigInt(Math.floor(value));
+    if (!Number.isInteger(value)) {
+      throw invalidParamsError(`Parameter ${fieldName} must be an integer (got ${value})`);
+    }
+    return BigInt(value);
   }
   if (typeof value === 'string') {
     try {
@@ -230,15 +232,15 @@ export function parseBuffer(
     return Buffer.from(value);
   }
   if (typeof value === 'string') {
-    // Try hex first
     if (value.startsWith('0x')) {
       return Buffer.from(value.slice(2), 'hex');
     }
-    // Check if it looks like hex (even length, all hex chars)
     if (value.length % 2 === 0 && /^[0-9a-fA-F]+$/.test(value)) {
-      return Buffer.from(value, 'hex');
+      const decoded = Buffer.from(value, 'hex');
+      if (decoded.length > 0) {
+        return decoded;
+      }
     }
-    // Otherwise, assume base64
     return Buffer.from(value, 'base64');
   }
   if (Array.isArray(value)) {
@@ -264,21 +266,30 @@ export function parseChainParam(
 
   // Parse chain parameter (can be prefix or full chain ID)
   if (chain) {
+    let resolved: { chainType: 'solana' | 'evm'; chainPrefix: string; chainId?: string };
     if (chain === 'sol' || chain === 'solana') {
-      return { chainType: 'solana', chainPrefix: 'sol' };
-    }
-    if (chain.includes(':')) {
+      resolved = { chainType: 'solana', chainPrefix: 'sol' };
+    } else if (chain.includes(':')) {
       const [prefix, id] = chain.split(':');
-      return {
+      resolved = {
         chainType: prefix === 'sol' ? 'solana' : 'evm',
-        chainPrefix: prefix,
+        chainPrefix: prefix!,
         chainId: id,
       };
+    } else {
+      resolved = {
+        chainType: 'evm',
+        chainPrefix: chain,
+      };
     }
-    return {
-      chainType: 'evm',
-      chainPrefix: chain,
-    };
+
+    if (chainType && chainType !== resolved.chainType) {
+      throw invalidParamsError(
+        `Conflicting chain parameters: chain="${chain}" implies ${resolved.chainType}, but chainType="${chainType}"`
+      );
+    }
+
+    return resolved;
   }
 
   return { chainType };
@@ -293,6 +304,48 @@ export function parsePagination(
   const offset = readNumber(obj, 'offset') ?? defaults?.offset ?? 0;
   return {
     limit: Math.min(Math.max(1, limit), 100),
-    offset: Math.max(0, offset),
+    offset: Math.min(Math.max(0, offset), 100000),
   };
+}
+
+// Input size limits
+const MAX_QUERY_LENGTH = 1000;
+const MAX_ARRAY_SIZE = 10000;
+
+export function readStringBounded(
+  obj: JsonRecord,
+  key: string,
+  required: true,
+  maxLength?: number
+): string;
+export function readStringBounded(
+  obj: JsonRecord,
+  key: string,
+  required?: false,
+  maxLength?: number
+): string | undefined;
+export function readStringBounded(
+  obj: JsonRecord,
+  key: string,
+  required = false,
+  maxLength = MAX_QUERY_LENGTH
+): string | undefined {
+  const value = readString(obj, key, required as true);
+  if (value !== undefined && value.length > maxLength) {
+    throw invalidParamsError(`Parameter ${key} exceeds maximum length of ${maxLength}`);
+  }
+  return value;
+}
+
+export function readArrayBounded(
+  obj: JsonRecord,
+  key: string,
+  required = false,
+  maxSize = MAX_ARRAY_SIZE
+): unknown[] | undefined {
+  const value = readArray(obj, key, required as true);
+  if (value !== undefined && value.length > maxSize) {
+    throw invalidParamsError(`Parameter ${key} exceeds maximum size of ${maxSize}`);
+  }
+  return value;
 }

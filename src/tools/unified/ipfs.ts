@@ -10,6 +10,7 @@ import {
 import { successResponse } from '../../core/serializers/common.js';
 import { globalState } from '../../state/global-state.js';
 import type { IPFSClientConfig } from '8004-solana';
+import { auditLog } from '../../core/utils/audit-log.js';
 
 
 // File size limits (shared Pinata account)
@@ -28,10 +29,28 @@ const IMAGE_SIGNATURES: Record<string, Buffer> = {
 /**
  * Validate image by checking magic bytes
  */
+function sanitizeSvg(content: string): string {
+  let cleaned = content;
+  // Remove <script> tags
+  cleaned = cleaned.replace(/<script[\s\S]*?<\/script>/gi, '');
+  cleaned = cleaned.replace(/<script[^>]*\/>/gi, '');
+  // Remove event handlers (on*)
+  cleaned = cleaned.replace(/\s+on\w+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, '');
+  // Remove <foreignObject> tags
+  cleaned = cleaned.replace(/<foreignObject[\s\S]*?<\/foreignObject>/gi, '');
+  cleaned = cleaned.replace(/<foreignObject[^>]*\/>/gi, '');
+  // Remove xlink:href pointing to javascript/data URIs
+  cleaned = cleaned.replace(/xlink:href\s*=\s*["']\s*javascript:[^"']*["']/gi, '');
+  cleaned = cleaned.replace(/xlink:href\s*=\s*["']\s*data:[^"']*["']/gi, '');
+  // Remove href pointing to javascript/data URIs
+  cleaned = cleaned.replace(/href\s*=\s*["']\s*javascript:[^"']*["']/gi, '');
+  cleaned = cleaned.replace(/href\s*=\s*["']\s*data:[^"']*["']/gi, '');
+  return cleaned;
+}
+
 function validateImageMagicBytes(buffer: Buffer, mimeType: string): boolean {
   const signature = IMAGE_SIGNATURES[mimeType];
   if (!signature) {
-    // SVG is text-based, check for XML/SVG tags
     if (mimeType === 'image/svg+xml') {
       const text = buffer.slice(0, 500).toString('utf8').toLowerCase();
       return text.includes('<svg') || text.includes('<?xml');
@@ -298,6 +317,7 @@ export const ipfsHandlers: Record<string, (args: unknown) => Promise<unknown>> =
     validateJsonSize(data, MAX_JSON_SIZE_BYTES, 'JSON data');
 
     const cid = await globalState.ipfs.addJson(data);
+    auditLog('ipfs_add_json', { cid });
 
     return successResponse({
       cid,
@@ -318,6 +338,7 @@ export const ipfsHandlers: Record<string, (args: unknown) => Promise<unknown>> =
     validateJsonSize(normalized, MAX_REGISTRATION_SIZE_BYTES, 'Registration file');
 
     const cid = await globalState.ipfs.addJson(normalized);
+    auditLog('ipfs_add_registration', { cid });
 
     return successResponse({
       cid,
@@ -375,6 +396,13 @@ export const ipfsHandlers: Record<string, (args: unknown) => Promise<unknown>> =
       );
     }
 
+    // Sanitize SVG content to prevent XSS
+    let uploadBuffer = buffer;
+    if (mimeType === 'image/svg+xml') {
+      const sanitized = sanitizeSvg(buffer.toString('utf8'));
+      uploadBuffer = Buffer.from(sanitized, 'utf8');
+    }
+
     // Get extension from MIME type
     const extensions: Record<string, string> = {
       'image/png': '.png',
@@ -391,9 +419,7 @@ export const ipfsHandlers: Record<string, (args: unknown) => Promise<unknown>> =
       throw new Error('Pinata JWT not configured. Images require Pinata.');
     }
 
-    // Use native fetch + FormData with Uint8Array for binary uploads
-    // Key: Buffer must be converted to Uint8Array before creating Blob
-    const uint8 = new Uint8Array(buffer);
+    const uint8 = new Uint8Array(uploadBuffer);
     const blob = new Blob([uint8], { type: mimeType });
     const formData = new FormData();
     formData.append('file', blob, `image${ext}`);
@@ -417,11 +443,13 @@ export const ipfsHandlers: Record<string, (args: unknown) => Promise<unknown>> =
       throw new Error(`No CID returned from Pinata`);
     }
 
+    auditLog('ipfs_add_image', { cid, mimeType, size: uploadBuffer.length });
+
     return successResponse({
       cid,
       gateway: `https://gateway.pinata.cloud/ipfs/${cid}`,
       uri: `ipfs://${cid}`,
-      size: buffer.length,
+      size: uploadBuffer.length,
       mimeType,
     });
   },

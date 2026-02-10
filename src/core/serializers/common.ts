@@ -53,8 +53,9 @@ export function serialize(value: unknown): unknown {
 
   // Handle plain objects
   if (typeof value === 'object') {
-    const obj: Record<string, unknown> = {};
+    const obj: Record<string, unknown> = Object.create(null);
     for (const [k, v] of Object.entries(value)) {
+      if (k === '__proto__' || k === 'constructor' || k === 'prototype') continue;
       obj[k] = serialize(v);
     }
     return obj;

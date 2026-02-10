@@ -24,9 +24,14 @@ export interface IIPFSService {
  * Global IPFS service that can be used by all chain providers.
  * This decouples IPFS storage from any specific chain implementation.
  */
+const MAX_CID_LENGTH = 128;
+const RATE_LIMIT_WINDOW_MS = 60_000;
+const RATE_LIMIT_MAX_OPS = 10;
+
 export class IPFSService implements IIPFSService {
   private _client?: IPFSClient;
   private _config?: IPFSClientConfig;
+  private _opTimestamps: number[] = [];
 
   /**
    * Check if IPFS is configured with valid credentials
@@ -80,6 +85,7 @@ export class IPFSService implements IIPFSService {
    * Add JSON data to IPFS and return CID
    */
   async addJson(data: Record<string, unknown>, _name?: string): Promise<string> {
+    this.checkRateLimit();
     const client = this.getClient();
     return client.addJson(data);
   }
@@ -88,6 +94,7 @@ export class IPFSService implements IIPFSService {
    * Add file to IPFS and return CID
    */
   async addFile(filepath: string): Promise<string> {
+    this.checkRateLimit();
     const client = this.getClient();
     return client.addFile(filepath);
   }
@@ -95,14 +102,24 @@ export class IPFSService implements IIPFSService {
   /**
    * Validate CID format (CIDv0 or CIDv1)
    */
+  private checkRateLimit(): void {
+    const now = Date.now();
+    this._opTimestamps = this._opTimestamps.filter(t => now - t < RATE_LIMIT_WINDOW_MS);
+    if (this._opTimestamps.length >= RATE_LIMIT_MAX_OPS) {
+      throw new Error(`Rate limit exceeded: max ${RATE_LIMIT_MAX_OPS} IPFS operations per minute`);
+    }
+    this._opTimestamps.push(now);
+  }
+
   private validateCid(cid: string): void {
     if (!cid || typeof cid !== 'string') {
       throw new Error('CID is required');
     }
     const trimmed = cid.trim();
-    // CIDv0: 46 chars, starts with Qm, base58btc
+    if (trimmed.length > MAX_CID_LENGTH) {
+      throw new Error(`CID too long: ${trimmed.length} characters (max ${MAX_CID_LENGTH})`);
+    }
     const isCidV0 = /^Qm[1-9A-HJ-NP-Za-km-z]{44}$/.test(trimmed);
-    // CIDv1: starts with b (base32) or z (base58btc), variable length
     const isCidV1 = /^[bz][a-z2-7A-Za-z0-9]{10,}$/.test(trimmed);
     if (!isCidV0 && !isCidV1) {
       throw new Error(`Invalid CID format: ${trimmed.substring(0, 20)}...`);
@@ -114,6 +131,7 @@ export class IPFSService implements IIPFSService {
    */
   async getJson<T = Record<string, unknown>>(cid: string): Promise<T> {
     this.validateCid(cid);
+    this.checkRateLimit();
     const client = this.getClient();
     return client.getJson<T>(cid);
   }

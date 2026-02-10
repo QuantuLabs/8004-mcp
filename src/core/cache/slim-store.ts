@@ -307,17 +307,12 @@ export class SlimStore {
 
   // Evict oldest entries if over limit
   private evictIfNeeded(): void {
-    const count = (this.db.prepare('SELECT COUNT(*) as c FROM agents').get() as { c: number }).c;
-
-    if (count > this.maxEntries) {
-      // Delete oldest 10% of entries
-      const toDelete = Math.ceil(count * 0.1);
-      this.db.prepare(`
-        DELETE FROM agents WHERE id IN (
-          SELECT id FROM agents ORDER BY expires_at ASC LIMIT ?
-        )
-      `).run(toDelete);
-    }
+    this.db.prepare(`
+      DELETE FROM agents WHERE rowid IN (
+        SELECT rowid FROM agents ORDER BY expires_at ASC
+        LIMIT MAX(0, (SELECT COUNT(*) FROM agents) - ?)
+      )
+    `).run(this.maxEntries);
   }
 
   // Stats

@@ -15,26 +15,14 @@ const KEY_LENGTH = 32; // 256 bits
 const NONCE_LENGTH = 12; // 96 bits for GCM
 const SALT_LENGTH = 32; // 256 bits
 
-// Argon2id parameters
-// OWASP recommended for production, reduced for testnet/dev
-const IS_TESTNET = process.env.NETWORK_MODE === 'testnet' || process.env.NODE_ENV === 'development';
-const ARGON2_OPTIONS: argon2.Options = IS_TESTNET
-  ? {
-      // Fast mode for testnet/development (~100ms)
-      type: argon2.argon2id,
-      memoryCost: 4096, // 4 MB
-      timeCost: 1, // 1 iteration
-      parallelism: 1, // 1 thread
-      hashLength: KEY_LENGTH,
-    }
-  : {
-      // Production mode (OWASP recommended, ~1-2s)
-      type: argon2.argon2id,
-      memoryCost: 65536, // 64 MB
-      timeCost: 3, // 3 iterations
-      parallelism: 4, // 4 parallel threads
-      hashLength: KEY_LENGTH,
-    };
+// Argon2id parameters (OWASP recommended, ~1-2s)
+const ARGON2_OPTIONS: argon2.Options = {
+  type: argon2.argon2id,
+  memoryCost: 65536,
+  timeCost: 3,
+  parallelism: 4,
+  hashLength: KEY_LENGTH,
+};
 
 // Chain types
 export type WalletChainType = 'solana' | 'evm';

@@ -27,8 +27,14 @@ import { formatOutput } from './core/serializers/common.js';
 import { sanitizeErrorMessage } from './core/errors/mcp-error.js';
 import { getWalletManager } from './core/wallet/index.js';
 
+import { readFileSync } from 'fs';
+import { fileURLToPath } from 'url';
+import { dirname, join as pathJoin } from 'path';
+
 const SERVER_NAME = '8004-mcp';
-const SERVER_VERSION = '0.1.0';
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const pkg = JSON.parse(readFileSync(pathJoin(__dirname, '..', 'package.json'), 'utf-8')) as { version: string };
+const SERVER_VERSION = pkg.version;
 
 async function main() {
   // Load environment configuration

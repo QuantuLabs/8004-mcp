@@ -6,6 +6,7 @@ import { successResponse } from '../../core/serializers/common.js';
 import { getWalletStore, type WalletChainType } from '../../core/wallet/wallet-store.js';
 import { globalState } from '../../state/global-state.js';
 import { wrapHandler } from '../../core/errors/mcp-error.js';
+import { auditLog } from '../../core/utils/audit-log.js';
 import type { SolanaChainProvider } from '../../chains/solana/provider.js';
 import type { EVMChainProvider } from '../../chains/evm/provider.js';
 import { Keypair } from '@solana/web3.js';
@@ -178,7 +179,7 @@ export const walletStoreTools: Tool[] = [
   },
   {
     name: 'wallet_delete',
-    description: 'Delete a wallet from the store. Store must be unlocked first.',
+    description: 'Delete a wallet from the store. Requires master password confirmation.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -186,8 +187,12 @@ export const walletStoreTools: Tool[] = [
           type: 'string',
           description: 'Name of the wallet to delete',
         },
+        password: {
+          type: 'string',
+          description: 'Master password to confirm deletion',
+        },
       },
-      required: ['name'],
+      required: ['name', 'password'],
     },
   },
   {
@@ -281,6 +286,7 @@ const _walletStoreHandlers: Record<string, (args: unknown) => Promise<unknown>> 
     }
 
     await store.initialize(password);
+    auditLog('wallet_store_init');
 
     return successResponse({
       initialized: true,
@@ -301,6 +307,7 @@ const _walletStoreHandlers: Record<string, (args: unknown) => Promise<unknown>> 
     }
 
     const result = await store.unlock(password);
+    auditLog('wallet_store_unlock', { walletCount: result.walletCount });
 
     // Invalidate SDKs to pick up unlocked wallets
     invalidateAllSDKs();
@@ -315,6 +322,7 @@ const _walletStoreHandlers: Record<string, (args: unknown) => Promise<unknown>> 
   wallet_store_lock: async () => {
     const store = getWalletStore();
     store.lock();
+    auditLog('wallet_store_lock');
 
     // Invalidate SDKs
     invalidateAllSDKs();
@@ -466,6 +474,7 @@ const _walletStoreHandlers: Record<string, (args: unknown) => Promise<unknown>> 
 
     // Add to store
     await store.addWallet(name, chainType, secretKey, publicKey, address);
+    auditLog('wallet_create', { name, chainType, address });
 
     // Invalidate SDK
     if (chainType === 'solana') {
@@ -541,14 +550,20 @@ const _walletStoreHandlers: Record<string, (args: unknown) => Promise<unknown>> 
   wallet_delete: async (args: unknown) => {
     const input = getArgs(args);
     const name = readString(input, 'name', true);
+    const password = readString(input, 'password', true);
 
     const store = getWalletStore();
 
+    // Re-verify master password before deletion
     if (!store.isUnlocked()) {
-      throw new Error('Wallet store is locked. Use wallet_store_unlock first.');
+      await store.unlock(password);
+    } else {
+      // Verify password by attempting unlock (will refresh if correct)
+      await store.unlock(password);
     }
 
     await store.removeWallet(name);
+    auditLog('wallet_delete', { name });
 
     // Invalidate SDKs
     invalidateAllSDKs();
