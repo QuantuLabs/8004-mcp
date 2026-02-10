@@ -554,11 +554,8 @@ const _walletStoreHandlers: Record<string, (args: unknown) => Promise<unknown>> 
 
     const store = getWalletStore();
 
-    // Re-verify master password before deletion
+    await store.verifyPassword(password);
     if (!store.isUnlocked()) {
-      await store.unlock(password);
-    } else {
-      // Verify password by attempting unlock (will refresh if correct)
       await store.unlock(password);
     }
 

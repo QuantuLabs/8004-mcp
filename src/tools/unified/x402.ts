@@ -29,6 +29,19 @@ import { CHAIN_CONFIGS, type NetworkMode } from '../../config/defaults.js';
 import { createHash } from 'crypto';
 import { encodeReputationValue } from '../../core/utils/value-encoding.js';
 
+function canonicalReplacer(_key: string, value: unknown): unknown {
+  if (value !== null && typeof value === 'object' && !Array.isArray(value)) {
+    const sorted: Record<string, unknown> = {};
+    for (const k of Object.keys(value as Record<string, unknown>).sort()) {
+      sorted[k] = (value as Record<string, unknown>)[k];
+    }
+    return sorted;
+  }
+  return value;
+}
+
+const usedProofTuples = new Set<string>();
+
 export const x402Tools: Tool[] = [
   {
     name: 'x402_identity_build',
@@ -215,7 +228,7 @@ export const x402Tools: Tool[] = [
         },
         validateProof: {
           type: 'boolean',
-          description: 'Validate proof format (default: false). Note: This only validates the format of addresses and transaction hash, NOT on-chain transaction presence.',
+          description: 'Validate proof format (default: true). Note: This only validates the format of addresses and transaction hash, NOT on-chain transaction presence.',
         },
         storeOnIpfs: {
           type: 'boolean',
@@ -500,8 +513,7 @@ export const x402Handlers: Record<
     };
 
     // SEAL v1: Calculate feedback FILE hash (SHA-256 of canonical JSON)
-    // This is feedbackFileHash - the hash of the external file content
-    const feedbackJson = JSON.stringify(feedbackFile, Object.keys(feedbackFile).sort());
+    const feedbackJson = JSON.stringify(feedbackFile, canonicalReplacer);
     const feedbackFileHash = createHash('sha256')
       .update(feedbackJson)
       .digest('hex');
@@ -522,7 +534,7 @@ export const x402Handlers: Record<
     const comment = readString(input, 'comment');
     const proofInput = readRecord(input, 'proofOfPayment', true);
     const settlementInput = readRecord(input, 'x402Settlement');
-    const shouldValidateProof = readBoolean(input, 'validateProof') ?? false;
+    const shouldValidateProof = readBoolean(input, 'validateProof') ?? true;
     const storeOnIpfs = readBoolean(input, 'storeOnIpfs') ?? true;
     const providedFeedbackUri = readString(input, 'feedbackUri');
     const skipSend = readBoolean(input, 'skipSend') ?? false;
@@ -610,6 +622,12 @@ export const x402Handlers: Record<
       throw new Error('Chain provider does not support feedback operations');
     }
 
+    // Replay protection: reject reused proof tuples
+    const proofKey = `${proofOfPayment.chainId}:${proofOfPayment.txHash}`;
+    if (usedProofTuples.has(proofKey)) {
+      throw new Error('Proof already used. Each (chainId, txHash) can only be submitted once.');
+    }
+
     // Optional proof format validation (addresses, tx hash format - NOT on-chain)
     if (shouldValidateProof) {
       const proofValidation = await validateProofFormat(proofOfPayment);
@@ -656,8 +674,7 @@ export const x402Handlers: Record<
     };
 
     // SEAL v1: Calculate feedback FILE hash (SHA-256 of canonical JSON)
-    // This is feedbackFileHash - the hash of the external file content
-    const feedbackJson = JSON.stringify(feedbackFile, Object.keys(feedbackFile).sort());
+    const feedbackJson = JSON.stringify(feedbackFile, canonicalReplacer);
     const feedbackFileHash = createHash('sha256')
       .update(feedbackJson)
       .digest('hex');
@@ -705,6 +722,9 @@ export const x402Handlers: Record<
       },
       { skipSend }
     );
+
+    // Record proof as used after successful submission
+    usedProofTuples.add(proofKey);
 
     if (result.unsigned) {
       return successResponse({

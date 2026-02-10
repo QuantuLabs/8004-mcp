@@ -110,9 +110,9 @@ export class SqliteStore {
     this.mmapSize = options?.mmapSize ?? DEFAULT_MMAP_SIZE;
     this.cacheSize = options?.cacheSize ?? DEFAULT_CACHE_SIZE;
 
-    // Validate path is within expected directory
-    const expectedBase = resolve(DEFAULT_CACHE_DIR);
-    if (!this.dbPath.startsWith(expectedBase)) {
+    // Validate path is strictly within expected directory
+    const expectedBase = resolve(DEFAULT_CACHE_DIR) + '/';
+    if (!this.dbPath.startsWith(expectedBase) && this.dbPath !== resolve(DEFAULT_CACHE_DIR)) {
       throw new McpError(
         McpErrorCode.CACHE_INIT_FAILED,
         `Database path must be within ${expectedBase}`,

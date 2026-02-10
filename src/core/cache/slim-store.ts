@@ -3,7 +3,7 @@
 
 import Database from 'better-sqlite3';
 import { homedir } from 'os';
-import { join } from 'path';
+import { join, resolve } from 'path';
 import { mkdirSync, existsSync } from 'fs';
 import type { ChainPrefix, ChainType, IAgentSummary, ISearchResult } from '../interfaces/agent.js';
 
@@ -36,9 +36,15 @@ export class SlimStore {
   private readonly maxEntries: number;
 
   constructor(config?: ISlimCacheConfig) {
-    this.dbPath = config?.dbPath ?? join(DEFAULT_CACHE_DIR, DEFAULT_DB_NAME);
+    const rawPath = config?.dbPath ?? join(DEFAULT_CACHE_DIR, DEFAULT_DB_NAME);
+    this.dbPath = resolve(rawPath);
     this.ttlMs = config?.ttlMs ?? DEFAULT_TTL_MS;
     this.maxEntries = config?.maxEntries ?? DEFAULT_MAX_ENTRIES;
+
+    const expectedBase = resolve(DEFAULT_CACHE_DIR) + '/';
+    if (!this.dbPath.startsWith(expectedBase) && this.dbPath !== resolve(DEFAULT_CACHE_DIR)) {
+      throw new Error(`Database path must be within ${DEFAULT_CACHE_DIR}`);
+    }
 
     const dir = this.dbPath.substring(0, this.dbPath.lastIndexOf('/'));
     if (!existsSync(dir)) {

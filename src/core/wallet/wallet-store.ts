@@ -6,7 +6,7 @@ import { Keypair } from '@solana/web3.js';
 import { privateKeyToAccount, type PrivateKeyAccount } from 'viem/accounts';
 import * as argon2 from 'argon2';
 import { promises as fs } from 'fs';
-import { join } from 'path';
+import { join, dirname } from 'path';
 import { homedir } from 'os';
 
 // Crypto constants
@@ -328,6 +328,9 @@ export class WalletStore {
       if (wallet.solanaKeypair) {
         wallet.solanaKeypair.secretKey.fill(0);
       }
+      if (wallet.evmAccount) {
+        (wallet as unknown as Record<string, unknown>).evmAccount = undefined;
+      }
     }
     this.unlockedWallets.clear();
 
@@ -409,7 +412,9 @@ export class WalletStore {
     storeFile.authTag = authTag.toString('base64');
     storeFile.ciphertext = ciphertext.toString('base64');
 
-    await fs.writeFile(this.storePath, JSON.stringify(storeFile, null, 2), { mode: 0o600 });
+    const tmpPath = join(dirname(this.storePath), `.wallet-store-${Date.now()}.tmp`);
+    await fs.writeFile(tmpPath, JSON.stringify(storeFile, null, 2), { mode: 0o600 });
+    await fs.rename(tmpPath, this.storePath);
   }
 
   // Add wallet to store
@@ -462,6 +467,9 @@ export class WalletStore {
     const wallet = this.unlockedWallets.get(name);
     if (wallet?.solanaKeypair) {
       wallet.solanaKeypair.secretKey.fill(0);
+    }
+    if (wallet?.evmAccount) {
+      (wallet as unknown as Record<string, unknown>).evmAccount = undefined;
     }
     this.unlockedWallets.delete(name);
 
@@ -516,13 +524,31 @@ export class WalletStore {
     return null;
   }
 
+  async verifyPassword(password: string): Promise<void> {
+    if (!await this.isInitialized()) {
+      throw new Error('Wallet store not initialized.');
+    }
+    const fileContent = await fs.readFile(this.storePath, 'utf-8');
+    const storeFile = JSON.parse(fileContent) as EncryptedStoreFile;
+    const salt = Buffer.from(storeFile.salt, 'base64');
+    const nonce = Buffer.from(storeFile.nonce, 'base64');
+    const authTag = Buffer.from(storeFile.authTag, 'base64');
+    const ciphertext = Buffer.from(storeFile.ciphertext, 'base64');
+    const key = await this.deriveKey(password, salt, storeFile.kdfParams);
+    try {
+      this.decrypt(ciphertext, key, nonce, authTag);
+    } catch {
+      throw new Error('Incorrect master password.');
+    }
+  }
+
   // Change master password
   async changePassword(currentPassword: string, newPassword: string): Promise<void> {
     if (newPassword.length < 8) {
       throw new Error('New password must be at least 8 characters.');
     }
 
-    // Verify current password
+    await this.verifyPassword(currentPassword);
     if (!this.isUnlocked()) {
       await this.unlock(currentPassword);
     }
@@ -553,7 +579,9 @@ export class WalletStore {
       ciphertext: ciphertext.toString('base64'),
     };
 
-    await fs.writeFile(this.storePath, JSON.stringify(storeFile, null, 2), { mode: 0o600 });
+    const tmpPath = join(dirname(this.storePath), `.wallet-store-${Date.now()}.tmp`);
+    await fs.writeFile(tmpPath, JSON.stringify(storeFile, null, 2), { mode: 0o600 });
+    await fs.rename(tmpPath, this.storePath);
 
     // Update in-memory key
     if (this.masterKey) {

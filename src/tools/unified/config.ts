@@ -9,9 +9,12 @@ import type { SolanaChainProvider } from '../../chains/solana/provider.js';
 import type { NetworkMode } from '../../config/defaults.js';
 import { getWalletStore } from '../../core/wallet/index.js';
 import { auditLog } from '../../core/utils/audit-log.js';
+import { resolve as dnsResolve } from 'dns/promises';
 
 // URL validation for RPC/indexer endpoints
-function validateEndpointUrl(urlString: string, label: string): void {
+const ENDPOINT_PRIVATE_PATTERNS = [/^127\./, /^10\./, /^172\.(1[6-9]|2[0-9]|3[0-1])\./, /^192\.168\./, /^169\.254\./, /^0\./, /^::1$/, /^fc00:/i, /^fe80:/i, /^fd[0-9a-f]{2}:/i];
+
+async function validateEndpointUrl(urlString: string, label: string): Promise<void> {
   let url: URL;
   try {
     url = new URL(urlString);
@@ -23,14 +26,13 @@ function validateEndpointUrl(urlString: string, label: string): void {
     throw new Error(`Invalid ${label} URL scheme: ${url.protocol}. Only http/https/ws/wss allowed.`);
   }
 
-  const hostname = url.hostname.toLowerCase();
+  const hostname = url.hostname.toLowerCase().replace(/^\[|\]$/g, '');
   const blockedHosts = ['localhost', '127.0.0.1', '::1', '0.0.0.0', 'metadata.google.internal', '169.254.169.254'];
   if (blockedHosts.includes(hostname)) {
     throw new Error(`${label} URL points to blocked host: ${hostname}`);
   }
 
-  const privatePatterns = [/^127\./, /^10\./, /^172\.(1[6-9]|2[0-9]|3[0-1])\./, /^192\.168\./, /^169\.254\./];
-  for (const p of privatePatterns) {
+  for (const p of ENDPOINT_PRIVATE_PATTERNS) {
     if (p.test(hostname)) {
       throw new Error(`${label} URL points to private IP: ${hostname}`);
     }
@@ -46,6 +48,23 @@ function validateEndpointUrl(urlString: string, label: string): void {
   for (const p of rebindingPatterns) {
     if (p.test(hostname)) {
       throw new Error(`${label} URL uses DNS rebinding service: ${hostname}`);
+    }
+  }
+
+  // Resolve hostname and validate IP addresses
+  if (!/^[\d.]+$/.test(hostname) && !hostname.includes(':')) {
+    try {
+      const addresses = await dnsResolve(hostname);
+      for (const addr of addresses) {
+        for (const p of ENDPOINT_PRIVATE_PATTERNS) {
+          if (p.test(addr)) {
+            throw new Error(`${label} URL hostname resolves to private IP: ${addr}`);
+          }
+        }
+      }
+    } catch (err) {
+      if (err instanceof Error && err.message.includes('private IP')) throw err;
+      throw new Error(`DNS resolution failed for ${label} URL: ${hostname}`);
     }
   }
 }
@@ -209,7 +228,7 @@ export const configHandlers: Record<string, (args: unknown) => Promise<unknown>>
         if (!walletStore.isUnlocked()) {
           throw new Error('Changing RPC URL requires wallet store to be unlocked. Use wallet_store_unlock first.');
         }
-        validateEndpointUrl(rpcUrl, 'RPC');
+        await validateEndpointUrl(rpcUrl, 'RPC');
         auditLog('config_set_rpc', { rpcUrl });
         updates.rpcUrl = rpcUrl;
         changes.push(`RPC URL: ${rpcUrl}`);
@@ -221,7 +240,7 @@ export const configHandlers: Record<string, (args: unknown) => Promise<unknown>>
         if (!walletStore.isUnlocked()) {
           throw new Error('Changing Indexer URL requires wallet store to be unlocked. Use wallet_store_unlock first.');
         }
-        validateEndpointUrl(indexerUrl, 'Indexer');
+        await validateEndpointUrl(indexerUrl, 'Indexer');
         auditLog('config_set_indexer', { indexerUrl });
         updates.indexerUrl = indexerUrl;
         changes.push(`Indexer URL: ${indexerUrl}`);

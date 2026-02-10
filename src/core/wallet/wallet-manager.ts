@@ -962,12 +962,29 @@ export class WalletManager {
 
   // Delete wallet (requires password confirmation)
   async delete(name: string, password: string): Promise<void> {
-    // Verify password first
-    await this.unlock(name, password);
+    await this.verifyPassword(name, password);
     this.lock(name);
 
     // Delete file
     await fs.unlink(this.getWalletPath(name));
+  }
+
+  async verifyPassword(name: string, password: string): Promise<void> {
+    const walletFile = await this.readWalletFile(name);
+    if (!walletFile) {
+      throw new Error(`Wallet "${name}" not found.`);
+    }
+    const salt = Buffer.from(walletFile.salt, 'base64');
+    const nonce = Buffer.from(walletFile.nonce, 'base64');
+    const authTag = Buffer.from(walletFile.authTag, 'base64');
+    const ciphertext = Buffer.from(walletFile.ciphertext, 'base64');
+    const key = await this.deriveKey(password, salt);
+    try {
+      const decrypted = this.decrypt(ciphertext, key, nonce, authTag);
+      decrypted.fill(0);
+    } catch {
+      throw new Error('Incorrect password.');
+    }
   }
 
   // Change password
@@ -977,7 +994,7 @@ export class WalletManager {
       throw new Error('New password must be at least 8 characters long.');
     }
 
-    // Unlock with current password
+    await this.verifyPassword(name, currentPassword);
     if (!this.isUnlocked(name)) {
       await this.unlock(name, currentPassword);
     }

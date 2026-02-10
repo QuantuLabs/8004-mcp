@@ -17,6 +17,30 @@ function ensureLogDir(): void {
   }
 }
 
+function sanitizeUrl(url: string): string {
+  try {
+    const parsed = new URL(url);
+    parsed.search = '';
+    parsed.username = '';
+    parsed.password = '';
+    return parsed.toString();
+  } catch {
+    return '[invalid-url]';
+  }
+}
+
+function sanitizeDetails(details: Record<string, unknown>): Record<string, unknown> {
+  const sanitized: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(details)) {
+    if (typeof value === 'string' && (key.toLowerCase().includes('url') || key.toLowerCase().includes('uri'))) {
+      sanitized[key] = sanitizeUrl(value);
+    } else {
+      sanitized[key] = value;
+    }
+  }
+  return sanitized;
+}
+
 export function auditLog(
   operation: string,
   details: Record<string, unknown> = {}
@@ -25,7 +49,7 @@ export function auditLog(
   const entry = {
     timestamp: new Date().toISOString(),
     operation,
-    ...details,
+    ...sanitizeDetails(details),
   };
   try {
     appendFileSync(LOG_FILE, JSON.stringify(entry) + '\n', { mode: 0o600 });

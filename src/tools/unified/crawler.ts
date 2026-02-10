@@ -21,8 +21,14 @@ const PRIVATE_IP_PATTERNS = [
   /^169\.254\./,                      // Link-local 169.254.0.0/16
   /^0\./,                             // Reserved 0.0.0.0/8
   /^::1$/,                            // IPv6 loopback
+  /^\[?::1\]?$/,                      // IPv6 loopback (bracketed)
   /^fc00:/i,                          // IPv6 unique local
+  /^fd[0-9a-f]{2}:/i,                 // IPv6 unique local (fd00::/8)
   /^fe80:/i,                          // IPv6 link-local
+  /^::$/,                             // IPv6 unspecified
+  /^::ffff:/i,                        // IPv6 mapped IPv4
+  /^100::/i,                          // IPv6 discard
+  /^f[cde]/i,                         // IPv6 private/link-local range
 ];
 
 const BLOCKED_HOSTNAMES = [
@@ -51,10 +57,18 @@ const SUSPICIOUS_HOSTNAME_PATTERNS = [
 ];
 
 function isPrivateIp(ip: string): boolean {
+  const normalized = ip.replace(/^\[|\]$/g, '');
   for (const pattern of PRIVATE_IP_PATTERNS) {
-    if (pattern.test(ip)) return true;
+    if (pattern.test(normalized)) return true;
   }
-  if (BLOCKED_HOSTNAMES.includes(ip)) return true;
+  if (BLOCKED_HOSTNAMES.includes(normalized)) return true;
+
+  // IPv6 mapped IPv4 (::ffff:x.x.x.x)
+  const v4mapped = normalized.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/i);
+  if (v4mapped && v4mapped[1]) {
+    return isPrivateIp(v4mapped[1]);
+  }
+
   return false;
 }
 
@@ -68,17 +82,16 @@ function validateCrawlerUrl(urlString: string): { valid: boolean; error?: string
     }
 
     const hostname = url.hostname.toLowerCase();
+    const bareHost = hostname.replace(/^\[|\]$/g, '');
 
     // Block known internal hostnames
-    if (BLOCKED_HOSTNAMES.includes(hostname)) {
+    if (BLOCKED_HOSTNAMES.includes(bareHost)) {
       return { valid: false, error: `Blocked hostname: ${hostname}` };
     }
 
-    // Block private IP addresses
-    for (const pattern of PRIVATE_IP_PATTERNS) {
-      if (pattern.test(hostname)) {
-        return { valid: false, error: `Private IP address not allowed: ${hostname}` };
-      }
+    // Block private IP addresses (including IPv6)
+    if (isPrivateIp(bareHost)) {
+      return { valid: false, error: `Private IP address not allowed: ${hostname}` };
     }
 
     // Block suspicious hostnames (DNS rebinding protection)
@@ -97,14 +110,20 @@ function validateCrawlerUrl(urlString: string): { valid: boolean; error?: string
 async function validateResolvedIp(urlString: string): Promise<{ valid: boolean; error?: string }> {
   try {
     const url = new URL(urlString);
-    const hostname = url.hostname.toLowerCase();
+    const hostname = url.hostname.toLowerCase().replace(/^\[|\]$/g, '');
 
     // Skip resolution for IPs (already checked by validateCrawlerUrl)
     if (/^[\d.]+$/.test(hostname) || hostname.includes(':')) {
       return { valid: true };
     }
 
-    const addresses = await dnsResolve(hostname).catch(() => []);
+    let addresses: string[];
+    try {
+      addresses = await dnsResolve(hostname);
+    } catch {
+      return { valid: false, error: `DNS resolution failed for ${hostname}` };
+    }
+
     for (const addr of addresses) {
       if (isPrivateIp(addr)) {
         return { valid: false, error: `Hostname ${hostname} resolves to private IP: ${addr}` };
@@ -112,7 +131,7 @@ async function validateResolvedIp(urlString: string): Promise<{ valid: boolean; 
     }
     return { valid: true };
   } catch {
-    return { valid: true }; // Allow if DNS resolution fails (let fetch handle it)
+    return { valid: false, error: 'URL validation failed' };
   }
 }
 

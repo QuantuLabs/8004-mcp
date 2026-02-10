@@ -11,6 +11,46 @@ import { successResponse } from '../../core/serializers/common.js';
 import { globalState } from '../../state/global-state.js';
 import type { IPFSClientConfig } from '8004-solana';
 import { auditLog } from '../../core/utils/audit-log.js';
+import { resolve as dnsResolve } from 'dns/promises';
+
+const IPFS_BLOCKED_HOSTS = ['localhost', '127.0.0.1', '::1', '0.0.0.0', 'metadata.google.internal', '169.254.169.254'];
+const IPFS_PRIVATE_PATTERNS = [/^127\./, /^10\./, /^172\.(1[6-9]|2[0-9]|3[0-1])\./, /^192\.168\./, /^169\.254\./, /^0\./, /^::1$/, /^fc00:/i, /^fe80:/i, /^fd[0-9a-f]{2}:/i];
+
+async function validateIpfsUrl(urlString: string): Promise<void> {
+  let url: URL;
+  try {
+    url = new URL(urlString);
+  } catch {
+    throw new Error('Invalid IPFS node URL format');
+  }
+  if (!['http:', 'https:'].includes(url.protocol)) {
+    throw new Error(`Invalid IPFS URL scheme: ${url.protocol}. Only http/https allowed.`);
+  }
+  const hostname = url.hostname.toLowerCase().replace(/^\[|\]$/g, '');
+  if (IPFS_BLOCKED_HOSTS.includes(hostname)) {
+    throw new Error(`IPFS URL points to blocked host: ${hostname}`);
+  }
+  for (const p of IPFS_PRIVATE_PATTERNS) {
+    if (p.test(hostname)) {
+      throw new Error(`IPFS URL points to private IP: ${hostname}`);
+    }
+  }
+  if (!/^[\d.]+$/.test(hostname) && !hostname.includes(':')) {
+    try {
+      const addresses = await dnsResolve(hostname);
+      for (const addr of addresses) {
+        for (const p of IPFS_PRIVATE_PATTERNS) {
+          if (p.test(addr)) {
+            throw new Error(`IPFS URL hostname resolves to private IP: ${addr}`);
+          }
+        }
+      }
+    } catch (err) {
+      if (err instanceof Error && err.message.includes('private IP')) throw err;
+      throw new Error(`DNS resolution failed for IPFS URL: ${hostname}`);
+    }
+  }
+}
 
 
 // File size limits (shared Pinata account)
@@ -275,6 +315,10 @@ export const ipfsHandlers: Record<string, (args: unknown) => Promise<unknown>> =
     const filecoinEnabled = readBoolean(input, 'filecoinEnabled') ?? false;
     const filecoinPrivateKey = readString(input, 'filecoinPrivateKey');
 
+    if (ipfsUrl) {
+      await validateIpfsUrl(ipfsUrl);
+    }
+
     // Build IPFS config
     const config: IPFSClientConfig = {
       pinataJwt,
@@ -374,6 +418,16 @@ export const ipfsHandlers: Record<string, (args: unknown) => Promise<unknown>> =
     if (!allowedMimeTypes.includes(mimeType)) {
       throw new Error(
         `Invalid MIME type: ${mimeType}. Allowed: ${allowedMimeTypes.join(', ')}`
+      );
+    }
+
+    // Pre-decode size check to prevent memory exhaustion
+    const maxEncodedSize = Math.ceil(MAX_IMAGE_SIZE_BYTES * 4 / 3);
+    if (data.length > maxEncodedSize) {
+      const sizeKB = (data.length * 3 / 4 / 1024).toFixed(1);
+      const maxKB = (MAX_IMAGE_SIZE_BYTES / 1024).toFixed(0);
+      throw new Error(
+        `Image too large: ~${sizeKB} KB (max ${maxKB} KB). Compress or resize your image.`
       );
     }
 
