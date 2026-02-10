@@ -43,3 +43,6 @@ scripts/
 # Test artifacts
 test-ledger/
 CLAUDE.md
+
+# Audit files (local only)
+audit.md
