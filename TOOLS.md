@@ -40,7 +40,7 @@ Complete list of all MCP tools available in @quantulabs/8004-mcp.
 |------|-------------|
 | `agent_get` | Get agent details by ID |
 | `agent_exists` | Check if agent exists on-chain |
-| `agent_search` | Search agents with filters (name, OASF skills/domains, keyword, feedback, capabilities) |
+| `agent_search` | Search agents with filters (name, OASF skills/domains, keyword, feedback, capabilities). If `chain` is omitted, searches all deployed chains in the current network |
 | `agent_list_by_owner` | List all agents owned by an address |
 | `agent_register` | Register a new agent |
 | `agent_transfer` | Transfer agent ownership |
@@ -57,7 +57,7 @@ Complete list of all MCP tools available in @quantulabs/8004-mcp.
 | `endpointQuery` | string | Search by MCP/A2A endpoint |
 | `searchMode` | string | `name`, `description`, `endpoint`, or `all` (default) |
 | `owner` | string | Filter by owner address |
-| `chain` | string | Chain prefix (`sol`, `base`, `eth`, `poly`, `bsc`, `monad`, `all`) |
+| `chain` | string | Chain prefix (`sol`, `base`, `eth`, `poly`, `bsc`, `monad`, `all`). Omit it for default cross-chain discovery across all deployed chains |
 | `mcpTools` | string[] | Filter by MCP tools |
 | `a2aSkills` | string[] | Filter by A2A skills |
 | `oasfSkills` | string[] | Filter by OASF skills (e.g., `web-search`) |

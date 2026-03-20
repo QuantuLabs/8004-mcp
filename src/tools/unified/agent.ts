@@ -54,7 +54,7 @@ export const agentTools: Tool[] = [
   },
   {
     name: 'agent_search',
-    description: 'Search agents across chains with advanced filters. Supports search by name, capabilities, MCP tools, A2A skills, and more.',
+    description: 'Search agents across chains with advanced filters. If chain is omitted, searches all deployed chains in the current network by default. Supports search by name, capabilities, MCP tools, A2A skills, and more.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -89,7 +89,7 @@ export const agentTools: Tool[] = [
         },
         chain: {
           type: 'string',
-          description: 'Filter by chain (sol, base, eth, poly, bsc, monad, all)',
+          description: 'Filter by chain (sol, base, eth, poly, bsc, monad, all). Omit to search all deployed chains by default.',
         },
         minQualityScore: {
           type: 'number',

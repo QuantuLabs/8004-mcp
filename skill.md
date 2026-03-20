@@ -122,6 +122,7 @@ Search agents across chains.
 ```typescript
 await client.callTool({ name: 'agent_search', arguments: {
   query: 'trading bot',      // Search name/description
+  // Omit `chain` for default cross-chain discovery across all deployed chains
   chain: 'eth',              // Optional: sol, eth, base, poly, bsc, monad, all
   limit: 20,                 // Default: 20, max: 100
   offset: 0,                 // Pagination offset
@@ -135,6 +136,8 @@ await client.callTool({ name: 'agent_search', arguments: {
 }});
 // Returns: { results: IAgentSummary[], total, hasMore, offset, limit }
 ```
+
+For priority discovery flows, prefer calling `agent_search` without `chain` first, then narrow to a specific chain only if you need to scope or compare results.
 
 #### cache_search
 Fast fuzzy search (FTS5). Use for partial name matches.

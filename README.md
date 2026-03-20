@@ -30,6 +30,7 @@ npm exec --yes --package /absolute/path/to/quantulabs-8004-mcp-<version>.tgz 800
 ## Features
 
 - **Multi-chain**: Solana + EVM (Base, Ethereum, Polygon, BSC, Monad)
+- **Cross-chain discovery**: `agent_search` searches all deployed chains by default unless you scope `chain`
 - **Unified API**: Same tools work across chains with automatic routing
 - **Wallet Management**: Encrypted local storage with auto-lock
 - **Local Cache**: SQLite with FTS5 for fast agent search
@@ -122,6 +123,26 @@ Agent: 8004 Test Agent
 - Owner: 0x9ca4...
 - Description: This is an explanation of my test agent
 - Created: 2026-01-27
+```
+
+#### Discover agents across all deployed chains
+
+> Cross-chain discovery is the default behavior of `agent_search`. If you omit `chain`, the MCP searches every deployed chain in the current network mode.
+
+```
+> Find me MCP-compatible agents across all chains
+
+Searching deployed chains in testnet mode:
+- Solana devnet
+- Ethereum Sepolia
+- Base Sepolia
+- BSC Chapel
+- Monad Testnet
+
+Top matches:
+1. sol:...
+2. eth:11155111:...
+3. base:84532:...
 ```
 
 #### Check agent reputation (Solana only)
@@ -231,7 +252,7 @@ console.log(`${tools.tools.length} tools available`);
 // Search agents
 const result = await client.callTool({
   name: 'agent_search',
-  arguments: { chain: 'eth', limit: 5 }
+  arguments: { hasMcp: true, limit: 5 } // Omit `chain` to search all deployed chains
 });
 console.log(result.content[0].text);
 
