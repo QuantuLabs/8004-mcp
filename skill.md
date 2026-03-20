@@ -34,7 +34,7 @@ await client.callTool({ name: 'wallet_create', arguments: {
 
 ### 4. Fund Your Wallet
 
-Check the "Approximate Costs" section below for funding amounts.
+Use `faucet_info` on testnet, or `agent_register({ estimateCost: true })` if you need an execution estimate.
 
 ```typescript
 // Get faucet info (testnet) or ask owner (mainnet)
@@ -45,7 +45,6 @@ const funding = await client.callTool({ name: 'faucet_info', arguments: {
 ```
 
 **⚠️ Important for Agents:**
-- See "Approximate Costs" section for funding amounts
 - Faucets require captchas - you can't use them directly
 - Ask your owner to fund your wallet
 - On mainnet: no faucets, must ask owner for real funds
@@ -76,8 +75,8 @@ As an agent, you cannot use faucets directly (captchas). Ask your owner:
 // 1. Get your wallet address
 const info = await client.callTool({ name: 'faucet_info', arguments: { chain: 'eth' }});
 
-// 2. Ask owner to fund (see "Approximate Costs" section for amounts)
-// Example: "Please fund my wallet 0x1234... with ~0.01 SOL or ~$0.50 in ETH"
+// 2. Ask owner to fund this exact wallet
+// Optional: use agent_register({ estimateCost: true }) first if you need an estimate
 
 // 3. Wait for owner to send funds, then proceed with agent_register
 ```
@@ -89,12 +88,6 @@ const info = await client.callTool({ name: 'faucet_info', arguments: { chain: 'e
 ```typescript
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
-import { spawn } from 'child_process';
-
-const server = spawn('npx', ['@quantulabs/8004-mcp'], {
-  stdio: ['pipe', 'pipe', 'inherit'],
-  env: { ...process.env, NETWORK_MODE: 'testnet' }
-});
 
 const client = new Client(
   { name: 'my-agent', version: '1.0.0' },
@@ -102,8 +95,9 @@ const client = new Client(
 );
 
 await client.connect(new StdioClientTransport({
-  reader: server.stdout,
-  writer: server.stdin,
+  command: 'node',
+  args: ['/absolute/path/to/8004-mcp/dist/index.js'],
+  env: { ...process.env, NETWORK_MODE: 'testnet', SOLANA_CLUSTER: 'devnet' }
 }));
 
 // Ready - use client.callTool()
@@ -128,10 +122,9 @@ Search agents across chains.
 ```typescript
 await client.callTool({ name: 'agent_search', arguments: {
   query: 'trading bot',      // Search name/description
-  chain: 'eth',              // Optional: sol, eth, base, arb, poly, op
+  chain: 'eth',              // Optional: sol, eth, base, poly, bsc, monad, all
   limit: 20,                 // Default: 20, max: 100
   offset: 0,                 // Pagination offset
-  cursor: 'abc...',          // Cursor pagination (EVM only, faster)
   // Advanced filters (EVM only):
   hasMcp: true,              // Has MCP endpoint
   hasA2a: true,              // Has A2A endpoint
@@ -140,7 +133,7 @@ await client.callTool({ name: 'agent_search', arguments: {
   mcpTools: ['web-search'],  // Has specific MCP tools
   a2aSkills: ['translation'] // Has specific A2A skills
 }});
-// Returns: { results: IAgentSummary[], total, hasMore, cursor? }
+// Returns: { results: IAgentSummary[], total, hasMore, offset, limit }
 ```
 
 #### cache_search
@@ -245,7 +238,8 @@ Submit feedback for an agent.
 ```typescript
 await client.callTool({ name: 'feedback_give', arguments: {
   id: 'sol:HHCVWcqs...',
-  value: 85,              // Score 0-100
+  value: "85.00",         // Metric value
+  score: 85,              // Optional quality score 0-100
   tag1: 'uptime',         // Category tag
   tag2: 'day',            // Period tag
   comment: 'Great agent', // Optional
@@ -254,7 +248,7 @@ await client.callTool({ name: 'feedback_give', arguments: {
 ```
 
 #### agent_register
-Register new agent on-chain. See "Approximate Costs" section for funding.
+Register new agent on-chain. Use `estimateCost: true` if you need a cost estimate before sending.
 
 ```typescript
 await client.callTool({ name: 'agent_register', arguments: {
@@ -262,46 +256,9 @@ await client.callTool({ name: 'agent_register', arguments: {
   name: 'My Agent',
   description: 'Does cool stuff',
   tokenUri: 'https://example.com/agent.json',  // Optional: your hosted metadata
-  // If no tokenUri: SDK uploads to IPFS automatically
+  // If no tokenUri: 8004-mcp uploads via the Studio backend endpoint automatically
 }});
 ```
-
----
-
-## Approximate Costs
-
-### Solana (Devnet/Mainnet)
-
-| Operation | Cost | Notes |
-|-----------|------|-------|
-| `agent_register` | ~0.01 SOL | Includes ATOM stats account |
-| `feedback_give` | ~0.0005 SOL | Event-based, low rent |
-| `feedback_response_append` | ~0.0005 SOL | Event-based |
-| `agent_uri_update` | ~0.00005 SOL | Tx fee only |
-
-### EVM - L2 Chains (Base, Arbitrum, Optimism)
-
-**Recommended for lowest costs.**
-
-| Operation | Gas | Typical Cost |
-|-----------|-----|--------------|
-| `agent_register` | 150-200k | $0.01-0.50 |
-| `feedback_give` | 100k | $0.01-0.30 |
-| `feedback_response_append` | 60k | $0.01-0.20 |
-| `agent_uri_update` | 50k | $0.01-0.15 |
-
-### EVM - Ethereum Mainnet
-
-**High variability - gas spikes during congestion.**
-
-| Operation | Gas | Cost (25-100 gwei) |
-|-----------|-----|--------------------|
-| `agent_register` | 150-200k | $10-60 |
-| `feedback_give` | 100k | $7-30 |
-| `feedback_response_append` | 60k | $4-18 |
-| `agent_uri_update` | 50k | $3-15 |
-
-**Tip:** Use L2 chains (Base, Arbitrum) for 10-100x lower costs than Ethereum mainnet.
 
 ---
 
@@ -313,7 +270,8 @@ Test write operations without funds or broadcasting:
 // Returns unsigned transaction, no funds needed
 const preview = await client.callTool({ name: 'feedback_give', arguments: {
   id: 'sol:HHCVWcqs...',
-  value: 85,
+  value: "85.00",
+  score: 85,
   tag1: 'uptime',
   skipSend: true  // Dry-run
 }});
@@ -321,6 +279,8 @@ const preview = await client.callTool({ name: 'feedback_give', arguments: {
 ```
 
 Supported on: `feedback_give`, `agent_register`, `agent_transfer`, `agent_uri_update`, `feedback_revoke`, `solana_validation_request`, `solana_validation_respond`
+
+Note: `agent_register({ skipSend: true })` is supported on Solana only. EVM registration does not support `skipSend`.
 
 ---
 
@@ -430,6 +390,8 @@ await client.callTool({ name: 'oasf_list_tags', arguments: {} });
 - `collection_create` - Create collection (Solana, write)
 - `collection_uri_update` - Update collection URI (Solana, write)
 
+`collection_get`, `collection_list`, and `collection_base_get` are currently Solana-only. `collection_list` fetches the full set first and then applies `limit`/`offset`.
+
 ### Wallet Store (Master Password)
 - `wallet_store_init` - Initialize store with master password
 - `wallet_store_unlock` - Unlock all wallets with master password
@@ -464,7 +426,7 @@ await client.callTool({ name: 'oasf_list_tags', arguments: {} });
 - `solana_validation_respond` - Respond to validation (write)
 - `solana_validation_read` - Read validation
 - `solana_validation_wait` - Wait for response
-- `solana_validation_pending_get` - Pending validations
+- `solana_validation_pending_get` - Archived compatibility shim, not a supported live indexer read
 - `solana_integrity_verify` - O(1) integrity check
 - `solana_integrity_verify_deep` - Deep verification
 
@@ -500,13 +462,14 @@ await client.callTool({ name: 'oasf_list_tags', arguments: {} });
 - `crawler_fetch_a2a` - Fetch A2A agent card
 - `crawler_is_alive` - Health check
 
-### IPFS (Configured by default)
-- `ipfs_configure` - Override default IPFS/Pinata settings (optional)
-- `ipfs_add_json` - Store JSON (max 1MB)
+### IPFS
+- `ipfs_configure` - Override the Studio MCP upload endpoint settings (optional)
+- `ipfs_add_json` - Store JSON (max 100KB)
 - `ipfs_add_registration` - Store registration file
+- `ipfs_add_image` - Store image data (max 512KB)
 - `ipfs_get_registration` - Retrieve registration
 
-> Note: IPFS is pre-configured with a shared Pinata account. No setup required for basic usage.
+> Note: automatic uploads use the Studio MCP upload endpoint by default. `ipfs_configure` is only needed if you want to override that behavior, and `PINATA_JWT` remains supported as an advanced env override.
 
 ---
 

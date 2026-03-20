@@ -1,5 +1,30 @@
 # Changelog
 
+## [0.4.0] - 2026-03-20
+
+### Changed
+- Refreshed dependencies and test tooling around Bun + Vitest 4 while keeping the local-first package workflow validated via tarball installs
+- EVM agent search now uses a hybrid strategy: SDK-first for filtered queries and direct subgraph pagination for broad browse queries
+- Documentation refreshed for the current setup flow, tool surface, and MCP client transport usage
+- IPFS uploads now default to the Studio MCP upload endpoint instead of an embedded shared Pinata JWT
+
+### Fixed
+- Aligned Solana registration and EVM wallet write paths with the current SDK interfaces used by `8004-solana` and `agent0-sdk`
+- Restored deployed subgraph defaults for BSC and Monad through the MCP defaults layer
+- Marked Polygon Amoy as undeployed on testnet instead of silently treating it as live
+- `config_set({ chain: ... })` now switches the real EVM default provider key
+- `health_check` now reports the packaged server version instead of a stale hardcoded value
+- Refreshed E2E feedback tests to match the current `feedback_give` API and explicit global-ID usage
+- `ipfs_add_image`, registration uploads, and x402 auto-storage now all flow through the shared IPFS service path
+- Rolled out the dedicated Studio MCP IPFS upload endpoint live at `https://studio.qnt.sh/api/mcp/ipfs/upload`
+- Kept `8004-mcp` on the dedicated Studio MCP upload endpoint as the default zero-config path
+- Added black-box installed-package IPFS coverage and aligned the Studio backend for SVG + multipart compatibility
+
+### Testing
+- `8004-minter`: `npm run test:run -- tests/mcp-ipfs.test.ts tests/mcp-ipfs-route.test.ts`, `npm run check`, `npm run build`, `npm run build:functions`, `firebase deploy --only functions:ssr`
+- `8004-mcp`: `bun run build`, `bun run lint`, targeted live-dependent suites green, then full E2E suite green: `21` files, `274` passed, `11` skipped
+- Added local-tarball black-box MCP E2Es for installed package startup and installed-package IPFS backend behavior
+
 ## [0.3.2] - 2026-02-09
 
 ### Added

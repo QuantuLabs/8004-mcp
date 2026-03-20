@@ -5,18 +5,26 @@ Multi-chain MCP server for the ERC-8004 Agent Registry Standard. Supports Solana
 ## Requirements
 
 - Node.js >= 20.0.0
-- npm or pnpm
+- `npm` if you want to pack/exec the local tarball
+- `bun` only for local development and tests
 
 ## Installation
 
+This repo should currently be treated as local-first. The package flow is tested locally, but do not assume the package is already published on npm.
+
+Run from the repo:
+
 ```bash
-npm install -g @quantulabs/8004-mcp
+bun install
+bun run build
+node dist/index.js
 ```
 
-Or run directly without installing:
+If you want to test the packaged behavior locally:
 
 ```bash
-npx @quantulabs/8004-mcp
+npm pack
+npm exec --yes --package /absolute/path/to/quantulabs-8004-mcp-<version>.tgz 8004-mcp
 ```
 
 ## Features
@@ -26,16 +34,20 @@ npx @quantulabs/8004-mcp
 - **Wallet Management**: Encrypted local storage with auto-lock
 - **Local Cache**: SQLite with FTS5 for fast agent search
 - **ATOM Reputation**: Full integration with Solana's reputation system
-- **IPFS Support**: Pinata, Filecoin, or custom node
+- **IPFS Support**: Studio MCP upload endpoint by default, with optional Pinata, Filecoin, or custom node overrides
 
 ## Configuration
 
-The MCP automatically loads a `.env` file from the current directory.
+Reads work out of the box with the built-in defaults. A `.env` file is optional and only needed if you want to override network, RPC, or IPFS settings. IPFS uploads use the Studio MCP upload endpoint by default.
+
+Advanced override note:
+- set `PINATA_JWT` if you want `8004-mcp` to use your own Pinata credentials instead of the Studio MCP upload endpoint
+- set `IPFS_UPLOAD_URL` only if you want to point the MCP to a different backend upload endpoint
 
 ```bash
 cp .env.example .env
-# Edit .env with your values
-npx @quantulabs/8004-mcp
+# Edit only the values you want to override
+node dist/index.js
 ```
 
 See [.env.example](./.env.example) for all available options.
@@ -45,7 +57,7 @@ See [.env.example](./.env.example) for all available options.
 ### Quick Start
 
 ```bash
-claude mcp add 8004 npx @quantulabs/8004-mcp
+claude mcp add 8004 node /absolute/path/to/8004-mcp/dist/index.js
 ```
 
 Works on **Windows, Mac, and Linux**. No `cmd /c` or `--` needed.
@@ -53,7 +65,7 @@ Works on **Windows, Mac, and Linux**. No `cmd /c` or `--` needed.
 With environment variables:
 
 ```bash
-claude mcp add 8004 -e DEFAULT_CHAIN=sol -e NETWORK_MODE=testnet npx @quantulabs/8004-mcp
+claude mcp add 8004 -e NETWORK_MODE=testnet -e SOLANA_CLUSTER=devnet node /absolute/path/to/8004-mcp/dist/index.js
 ```
 
 ### Manual Configuration
@@ -64,11 +76,11 @@ Edit `~/.claude.json` (or `%USERPROFILE%\.claude.json` on Windows):
 {
   "mcpServers": {
     "8004": {
-      "command": "npx",
-      "args": ["@quantulabs/8004-mcp"],
+      "command": "node",
+      "args": ["/absolute/path/to/8004-mcp/dist/index.js"],
       "env": {
-        "DEFAULT_CHAIN": "sol",
-        "NETWORK_MODE": "testnet"
+        "NETWORK_MODE": "testnet",
+        "SOLANA_CLUSTER": "devnet"
       }
     }
   }
@@ -125,7 +137,9 @@ Total Feedbacks: 29
 Average Score: 24.4
 ```
 
-#### Top agents leaderboard (Solana only)
+#### Top agents leaderboard
+
+> Trust tiers remain Solana-only, but leaderboard reads are available on deployed EVM chains too.
 
 ```
 > Show me the top 5 agents by reputation
@@ -152,7 +166,7 @@ Feedback submitted! Transaction: 4xR7m...
 ```
 > Register a new agent called "MyBot" with MCP endpoint https://mybot.com/mcp
 
-1. Uploading registration to IPFS...
+1. Uploading registration via Studio backend...
 2. Registering on-chain...
 
 Agent registered!
@@ -187,39 +201,6 @@ Switched to mainnet. Active chains:
 - Ethereum: mainnet (chainId: 1)
 ```
 
-## Cost Reference
-
-Use `estimateCost: true` with `agent_register` to get real-time prices.
-
-### Solana (SOL @ $150)
-
-| Operation | Cost Range | USD |
-|-----------|------------|-----|
-| `agent_register` | 0.008-0.01 SOL | ~$1.20-1.50 |
-| `feedback_give` | 0.0001-0.0005 SOL | ~$0.02-0.08 |
-| `feedback_response_append` | 0.0001-0.0005 SOL | ~$0.02-0.08 |
-| `agent_uri_update` | 0.00005 SOL | ~$0.01 |
-
-### EVM - Base L2 (Recommended)
-
-| Operation | Gas | @ 0.01 gwei | @ 1 gwei |
-|-----------|-----|-------------|----------|
-| `agent_register` | 150-200k | ~$0.005-0.006 | ~$0.45-0.60 |
-| `feedback_give` | 100k | ~$0.003 | ~$0.30 |
-| `feedback_response_append` | 60k | ~$0.002 | ~$0.18 |
-| `agent_uri_update` | 50k | ~$0.002 | ~$0.15 |
-
-### EVM - Ethereum Mainnet
-
-| Operation | Gas | @ 25 gwei | @ 50 gwei |
-|-----------|-----|-----------|-----------|
-| `agent_register` | 150-200k | ~$11-15 | ~$22-30 |
-| `feedback_give` | 100k | ~$7.50 | ~$15 |
-| `feedback_response_append` | 60k | ~$4.50 | ~$9 |
-| `agent_uri_update` | 50k | ~$3.75 | ~$7.50 |
-
-**Tip:** Use L2/alt chains (Base, BSC, Monad) for 10-100x lower costs than Ethereum mainnet.
-
 ## Usage for Autonomous Agents
 
 For programmatic access from autonomous agents, AI frameworks, or custom applications:
@@ -229,17 +210,11 @@ For programmatic access from autonomous agents, AI frameworks, or custom applica
 ```javascript
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
-import { spawn } from 'child_process';
-
-// Start the MCP server
-const server = spawn('npx', ['@quantulabs/8004-mcp'], {
-  stdio: ['pipe', 'pipe', 'inherit'],
-  env: { ...process.env, NETWORK_MODE: 'testnet' },
-});
 
 const transport = new StdioClientTransport({
-  reader: server.stdout,
-  writer: server.stdin,
+  command: 'node',
+  args: ['/absolute/path/to/8004-mcp/dist/index.js'],
+  env: { ...process.env, NETWORK_MODE: 'testnet', SOLANA_CLUSTER: 'devnet' },
 });
 
 const client = new Client(
@@ -273,13 +248,19 @@ console.log(agent.content[0].text);
 Use `skipSend: true` to get unsigned transactions without broadcasting:
 
 ```javascript
-// Create a wallet first
+// Initialize the wallet store once, then create a wallet
+await client.callTool({
+  name: 'wallet_store_init',
+  arguments: {
+    password: 'my-secure-password'
+  }
+});
+
 await client.callTool({
   name: 'wallet_create',
   arguments: {
     name: 'test-wallet',
-    chainType: 'solana',
-    password: 'my-secure-password'
+    chainType: 'solana'
   }
 });
 
@@ -351,16 +332,10 @@ The MCP supports the x402 payment protocol extension for reputation (`8004-reput
 ```javascript
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
-import { spawn } from 'child_process';
-
-// Start the MCP server
-const server = spawn('npx', ['@quantulabs/8004-mcp'], {
-  stdio: ['pipe', 'pipe', 'inherit'],
-});
 
 const transport = new StdioClientTransport({
-  reader: server.stdout,
-  writer: server.stdin,
+  command: 'node',
+  args: ['/absolute/path/to/8004-mcp/dist/index.js'],
 });
 
 const mcpClient = new Client(
@@ -403,11 +378,13 @@ const proofResult = await mcpClient.callTool({
 
 const proof = JSON.parse(proofResult.content[0].text);
 
-// Option A: Auto-store on IPFS (requires ipfs_configure first)
+// Option A: Auto-store on IPFS (works out of the box via the Studio MCP upload endpoint)
 await mcpClient.callTool({
   name: 'x402_feedback_submit',
   arguments: {
     agentId: 'sol:AgentPubkey...',
+    value: 8500,
+    valueDecimals: 2,
     score: 85,
     tag1: 'x402-resource-delivered',
     tag2: 'exact-svm',
@@ -422,8 +399,11 @@ const buildResult = await mcpClient.callTool({
   name: 'x402_feedback_build',
   arguments: {
     agentId: 'base:84532:123',
+    value: 9000,
+    valueDecimals: 2,
     score: 90,
     tag1: 'x402-resource-delivered',
+    tag2: 'exact-evm',
     proofOfPayment: proof.proofOfPayment
   }
 });
@@ -435,8 +415,11 @@ await mcpClient.callTool({
   name: 'x402_feedback_submit',
   arguments: {
     agentId: 'base:84532:123',
+    value: 9000,
+    valueDecimals: 2,
     score: 90,
     tag1: 'x402-resource-delivered',
+    tag2: 'exact-evm',
     proofOfPayment: proof.proofOfPayment,
     feedbackUri: myUri,
     storeOnIpfs: false
@@ -448,7 +431,7 @@ await mcpClient.callTool({
 
 Feedback files **must** be stored for the x402 protocol. Two options:
 
-1. **Auto IPFS** (`storeOnIpfs: true`): Configure IPFS first with `ipfs_configure`, then feedback is automatically stored
+1. **Auto IPFS** (`storeOnIpfs: true`): Works with the Studio MCP upload endpoint out of the box. Use `ipfs_configure` only if you want to override it.
 2. **Manual storage** (`feedbackUri`): Use `x402_feedback_build` to get the file, store it yourself (Arweave, your IPFS, HTTP), then pass the URI
 
 Supported URI schemes: `ipfs://`, `ar://`, `https://`, `http://`
@@ -484,18 +467,18 @@ If you see `cmd C:/` instead of `cmd /c`, the command was parsed incorrectly.
 
 **Wrong** (causes Windows parsing bug):
 ```bash
-claude mcp add 8004 -- cmd /c npx @quantulabs/8004-mcp
+claude mcp add 8004 -- cmd /c node C:/absolute/path/to/8004-mcp/dist/index.js
 ```
 
 **Correct**:
 ```bash
-claude mcp add 8004 npx @quantulabs/8004-mcp
+claude mcp add 8004 node C:/absolute/path/to/8004-mcp/dist/index.js
 ```
 
 ### Server not starting
 
 1. Check logs: `claude mcp logs 8004`
-2. Verify installation: `npx @quantulabs/8004-mcp --help`
+2. Verify the local build exists: `node /absolute/path/to/8004-mcp/dist/index.js`
 3. Restart Claude Code after adding the server
 
 ## Development
@@ -503,9 +486,9 @@ claude mcp add 8004 npx @quantulabs/8004-mcp
 ```bash
 git clone https://github.com/QuantuLabs/8004-mcp.git
 cd 8004-mcp
-npm install
-npm run build
-npm test
+bun install
+bun run build
+bun run test
 ```
 
 ## Adding Your Registry

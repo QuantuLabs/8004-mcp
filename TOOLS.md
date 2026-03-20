@@ -31,6 +31,8 @@ Complete list of all MCP tools available in @quantulabs/8004-mcp.
 | `config_reset` | Reset configuration from environment |
 | `network_get` | Get network status for all chains |
 | `network_set` | Switch between testnet and mainnet |
+| `health_check` | Get server, chain, wallet store, and cache health |
+| `faucet_info` | Get funding guidance for a chain (faucets on testnet, owner funding on mainnet) |
 
 ## Agent Operations
 
@@ -58,7 +60,7 @@ Complete list of all MCP tools available in @quantulabs/8004-mcp.
 | `chain` | string | Chain prefix (`sol`, `base`, `eth`, `poly`, `bsc`, `monad`, `all`) |
 | `mcpTools` | string[] | Filter by MCP tools |
 | `a2aSkills` | string[] | Filter by A2A skills |
-| `oasfSkills` | string[] | Filter by OASF skills (e.g., `text-generation`) |
+| `oasfSkills` | string[] | Filter by OASF skills (e.g., `web-search`) |
 | `oasfDomains` | string[] | Filter by OASF domains (e.g., `finance`) |
 | `keyword` | string | Semantic keyword search |
 | `minFeedbackCount` | number | Minimum feedback count |
@@ -88,8 +90,8 @@ Complete list of all MCP tools available in @quantulabs/8004-mcp.
 | `value` | number/string | Yes | Metric value - accepts decimal strings (`"99.77"`) or raw integers |
 | `valueDecimals` | number | No | Only needed for raw integers. Auto-detected from decimal strings |
 | `score` | number | No | Quality score (0-100), optional |
-| `tag1` | string | No | Primary ATOM tag (e.g., uptime, latency, accuracy) |
-| `tag2` | string | No | Time period tag (e.g., day, week, month, year) |
+| `tag1` | string | No | Primary standardized tag (e.g., `uptime`, `successrate`, `revenues`) |
+| `tag2` | string | No | Time period or x402 network tag (e.g., `day`, `week`, `exact-svm`, `exact-evm`) |
 | `comment` | string | No | Optional feedback comment |
 | `skipSend` | boolean | No | Return unsigned transaction if true |
 
@@ -108,18 +110,33 @@ Complete list of all MCP tools available in @quantulabs/8004-mcp.
 The ATOM reputation engine uses standardized tags for automatic normalization:
 
 **tag1 (Category):**
-- `uptime` - Availability percentage (e.g., `"99.77"`)
-- `latency` - Response time in ms (lower is better)
-- `accuracy` - Accuracy percentage
-- `throughput` - Requests per second
-- `error-rate` - Error percentage (lower is better)
-- `cost` - Cost in microdollars (lower is better)
+- `starred`
+- `reachable`
+- `ownerverified`
+- `uptime`
+- `successrate`
+- `responsetime`
+- `blocktimefreshness`
+- `revenues`
+- `tradingyield`
 
 **tag2 (Time Period):**
 - `day` - Daily measurement
 - `week` - Weekly measurement
 - `month` - Monthly measurement
 - `year` - Yearly measurement
+
+**x402 / network tags:**
+- `x402-resource-delivered`
+- `x402-delivery-failed`
+- `x402-delivery-timeout`
+- `x402-quality-issue`
+- `x402-good-payer`
+- `x402-payment-failed`
+- `x402-insufficient-funds`
+- `x402-invalid-signature`
+- `exact-evm`
+- `exact-svm`
 
 ## Reputation
 
@@ -132,12 +149,14 @@ The ATOM reputation engine uses standardized tags for automatic normalization:
 
 | Tool | Description |
 |------|-------------|
-| `collection_get` | Get collection details by ID |
-| `collection_list` | List all collections |
+| `collection_get` | Get collection details by ID (currently Solana only) |
+| `collection_list` | List all collections (currently Solana only) |
 | `collection_agents` | List agents in a collection |
-| `collection_base_get` | Get the base/default collection |
+| `collection_base_get` | Get the base/default collection (currently Solana only) |
 | `collection_create` | Create a new collection (Solana only) |
 | `collection_uri_update` | Update collection metadata URI |
+
+`collection_list` is currently Solana-only, fetches the full list first, then applies `limit`/`offset`, and may require an advanced Solana RPC provider that supports `getProgramAccounts` memcmp filters.
 
 ## Cache
 
@@ -153,24 +172,28 @@ The ATOM reputation engine uses standardized tags for automatic normalization:
 | Tool | Description |
 |------|-------------|
 | `wallet_list` | List all wallets with status |
+| `wallet_store_init` | Initialize the encrypted wallet store |
+| `wallet_store_unlock` | Unlock the wallet store for write operations |
+| `wallet_store_lock` | Lock the wallet store and wipe keys from memory |
+| `wallet_store_status` | Get wallet store status |
+| `wallet_store_change_password` | Change the wallet store master password |
+| `wallet_store_migrate` | Migrate legacy wallets into the wallet store |
 | `wallet_info` | Get detailed wallet information |
 | `wallet_create` | Create a new wallet (Solana or EVM) |
 | `wallet_import` | Import existing private key |
-| `wallet_unlock` | Unlock wallet for signing |
-| `wallet_lock` | Lock wallet (clear from memory) |
-| `wallet_export` | Export encrypted backup |
 | `wallet_delete` | Delete wallet permanently |
-| `wallet_change_password` | Change wallet password |
+| `wallet_security` | Inspect wallet security settings and status |
 
 ## IPFS
 
-IPFS is a global service (chain-agnostic). Configure once, use with any chain.
+IPFS is a global service (chain-agnostic). The Studio MCP upload endpoint works by default; `ipfs_configure` is only needed for overrides.
 
 | Tool | Description |
 |------|-------------|
-| `ipfs_configure` | Configure IPFS client (Pinata, Filecoin, or node) |
+| `ipfs_configure` | Override the Studio MCP upload endpoint or switch to explicit Pinata, Filecoin, or a custom node |
 | `ipfs_add_json` | Store JSON data to IPFS |
 | `ipfs_add_registration` | Store agent registration file |
+| `ipfs_add_image` | Upload an image to IPFS |
 | `ipfs_get_registration` | Retrieve registration file by CID |
 
 ## OASF Validation
@@ -181,6 +204,8 @@ IPFS is a global service (chain-agnostic). Configure once, use with any chain.
 | `oasf_validate_domain` | Validate a domain slug format |
 | `oasf_list_skills` | List all valid OASF skills |
 | `oasf_list_domains` | List all valid OASF domains |
+| `oasf_list_tags` | List all valid OASF and x402 tags |
+| `oasf_validate_tag` | Validate an OASF/x402 tag slug |
 
 ## Crawler
 
@@ -189,6 +214,8 @@ IPFS is a global service (chain-agnostic). Configure once, use with any chain.
 | `crawler_fetch_mcp` | Fetch MCP capabilities from endpoint |
 | `crawler_fetch_a2a` | Fetch A2A agent card from endpoint |
 | `crawler_is_alive` | Health check an endpoint |
+
+For a reachable public endpoint that is not actually an MCP or A2A server, `crawler_fetch_mcp` and `crawler_fetch_a2a` can return `success: true` with `capabilities: null`.
 
 ## Solana-Specific: ATOM Reputation
 
@@ -215,7 +242,7 @@ IPFS is a global service (chain-agnostic). Configure once, use with any chain.
 | `solana_validation_respond` | Respond to validation request |
 | `solana_validation_read` | Read validation request details |
 | `solana_validation_wait` | Wait for validation with retry |
-| `solana_validation_pending_get` | Get pending validations for validator |
+| `solana_validation_pending_get` | Archived compatibility shim. Kept for older clients; not a supported live indexer read path |
 
 ## EVM-Specific
 
@@ -269,21 +296,18 @@ Tools for integrating ERC-8004 agent reputation with the x402 payment protocol.
 
 ### Example Flows
 
-#### Option A: Auto-store on IPFS (requires `ipfs_configure`)
+#### Option A: Auto-store on IPFS (works out of the box)
 
 ```javascript
-// 1. Configure IPFS (once per session)
-await ipfs_configure({ pinataJwt: "your-jwt-token" });
-
-// 2. Server: Build identity for PaymentRequired response
+// 1. Server: Build identity for PaymentRequired response
 const identity = await x402_identity_build({ agentId: "sol:AgentPubkey..." });
 // Returns: { agentRegistry: "solana:EtWTRA...:HHCVWc...", agentId: "AgentPubkey..." }
 
-// 3. Client: Parse PaymentResponse after payment
+// 2. Client: Parse PaymentResponse after payment
 const proof = await x402_proof_parse({ paymentResponse: "eyJ0eEhhc2gi..." });
 // Returns: { proofOfPayment: { fromAddress, toAddress, chainId, txHash }, settlement: {...} }
 
-// 4. Submit feedback (auto-stores on IPFS)
+// 3. Submit feedback (auto-stores on IPFS)
 await x402_feedback_submit({
   agentId: "sol:AgentPubkey...",
   value: 8500,
