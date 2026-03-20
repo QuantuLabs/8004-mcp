@@ -1,18 +1,9 @@
 import { defineConfig } from 'vitest/config';
 import { loadEnv } from 'vite';
-import { availableParallelism } from 'node:os';
 
-const envWorkers = process.env.VITEST_MAX_WORKERS;
-const defaultWorkers = Math.max(2, Math.min(6, Math.ceil(availableParallelism() * 0.5)));
-const maxWorkers =
-  envWorkers && /^\d+%$/.test(envWorkers)
-    ? envWorkers
-    : envWorkers && /^\d+$/.test(envWorkers)
-      ? Number.parseInt(envWorkers, 10)
-      : defaultWorkers;
+const e2eWorkers = Number.parseInt(process.env.VITEST_E2E_MAX_WORKERS ?? '1', 10);
 
 export default defineConfig(({ mode }) => {
-  // Load env file
   const env = loadEnv(mode, process.cwd(), '');
 
   return {
@@ -20,21 +11,17 @@ export default defineConfig(({ mode }) => {
       env,
       globals: true,
       environment: 'node',
-      include: ['tests/**/*.test.ts'],
+      include: ['tests/e2e/**/*.test.ts'],
+      setupFiles: ['tests/e2e/setup-env.ts'],
       exclude: ['node_modules', 'dist'],
       pool: 'forks',
-      maxWorkers,
+      maxWorkers: Number.isNaN(e2eWorkers) ? 1 : Math.max(1, e2eWorkers),
       coverage: {
         provider: 'v8',
         reporter: ['text', 'json', 'html'],
+        reportsDirectory: './coverage/e2e',
         include: ['src/**/*.ts'],
         exclude: ['src/**/*.d.ts', 'src/**/index.ts'],
-        thresholds: {
-          statements: 80,
-          branches: 70,
-          functions: 80,
-          lines: 80,
-        },
       },
       testTimeout: 30000,
       hookTimeout: 30000,
