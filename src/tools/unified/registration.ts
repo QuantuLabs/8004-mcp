@@ -12,7 +12,7 @@ import { globalState } from '../../state/global-state.js';
 import type { ChainPrefix } from '../../core/interfaces/agent.js';
 import type { SolanaChainProvider } from '../../chains/solana/provider.js';
 import type { EVMChainProvider } from '../../chains/evm/provider.js';
-import { PublicKey, LAMPORTS_PER_SOL } from '@solana/web3.js';
+import { LAMPORTS_PER_SOL } from '@solana/web3.js';
 import { ACCOUNT_SIZES, calculateRentExempt } from '8004-solana';
 import { createPublicClient, http, formatEther } from 'viem';
 import { extractTokenId } from '../../core/utils/agent-id.js';
@@ -42,7 +42,7 @@ export const registrationTools: Tool[] = [
         },
         collection: {
           type: 'string',
-          description: 'Collection address/pubkey (Solana only, uses base registry if not provided)',
+          description: 'Optional Solana collection pointer to attach after registration (c1:, CID, or ipfs://). Legacy base collection pubkey is no longer required.',
         },
         mcpEndpoint: {
           type: 'string',
@@ -151,7 +151,14 @@ export const registrationHandlers: Record<string, (args: unknown) => Promise<unk
     }
 
     const sdk = provider.getState().getSdk();
-    const result = await sdk.createCollection(name, uri, { skipSend });
+    // The installed 8004-solana runtime still supports the legacy
+    // createCollection(name, uri, options) flow even though local typings
+    // currently narrow the overloads during this package migration.
+    const result = await (sdk as any).createCollection(name, uri, { skipSend });
+    const maybeError = result as { success?: boolean; error?: string };
+    if (maybeError.success === false && maybeError.error) {
+      throw new Error(maybeError.error);
+    }
 
     if (skipSend && 'transaction' in result) {
       return successResponse({
@@ -228,7 +235,7 @@ async function registerSolanaAgent(params: {
       throw new Error(
         'No tokenUri provided and IPFS not configured. Either:\n' +
         '1. Provide tokenUri with your hosted metadata (HTTP or IPFS)\n' +
-        '2. Configure IPFS with ipfs_configure first for automatic upload'
+        '2. Restore the default IPFS backend or use ipfs_configure to point to your own upload backend'
       );
     }
 
@@ -257,10 +264,11 @@ async function registerSolanaAgent(params: {
 
   const sdk = provider.getState().getSdk();
 
-  // Parse collection if provided
-  const collectionPubkey = collection ? new PublicKey(collection) : undefined;
+  const registerOptions = collection
+    ? { skipSend, collectionPointer: collection }
+    : { skipSend };
 
-  const result = await sdk.registerAgent(finalTokenUri, collectionPubkey, { skipSend });
+  const result = await sdk.registerAgent(finalTokenUri, registerOptions);
 
   if (skipSend && 'transaction' in result) {
     return successResponse({
@@ -329,7 +337,7 @@ async function registerEvmAgent(params: {
       throw new Error(
         'No tokenUri provided and IPFS not configured. Either:\n' +
         '1. Provide tokenUri with your hosted metadata (HTTP or IPFS)\n' +
-        '2. Configure IPFS with ipfs_configure first for automatic upload'
+        '2. Restore the default IPFS backend or use ipfs_configure to point to your own upload backend'
       );
     }
 

@@ -104,45 +104,30 @@ export class SolanaChainProvider implements IChainProvider {
 
   async searchAgents(params: ISearchParams): Promise<ISearchResult> {
     const sdk = this.state.getSdk();
-    const indexer = this.state.getIndexer();
     const offset = params.offset ?? 0;
     const limit = params.limit ?? 20;
+    const hasTextSearch = !!(params.query || params.nameQuery || params.descriptionQuery || params.endpointQuery);
+    const requiresClientFiltering =
+      hasTextSearch ||
+      params.minQualityScore !== undefined ||
+      params.minTrustTier !== undefined;
 
-    // Use indexer if available
-    if (indexer && !this.state.config.forceOnChain) {
+    if (await this.canUseIndexer(sdk)) {
       try {
-        let results: IndexedAgent[] = [];
-        let indexerPaginated = false;
+        const searchLimit = requiresClientFiltering ? 500 : limit;
+        let results = await sdk.searchAgents({
+          owner: params.owner,
+          collection: params.collection,
+          minScore: params.minQualityScore,
+          limit: searchLimit,
+          offset: requiresClientFiltering ? 0 : offset,
+        });
 
-        if (params.owner) {
-          // getAgentsByOwner returns all agents, no pagination
-          results = await indexer.getAgentsByOwner(params.owner);
-        } else if (params.collection) {
-          // getAgentsByCollection returns all agents, no pagination
-          results = await indexer.getAgentsByCollection(params.collection);
-        } else if (params.query || params.minQualityScore !== undefined || params.minTrustTier !== undefined) {
-          // Text search or filters: fetch larger batch for client-side filtering
-          // Indexer doesn't support text search, so we fetch more and filter
-          const searchLimit = 500; // Fetch up to 500 agents for search
-          results = await indexer.getAgents({
-            limit: searchLimit,
-            offset: 0, // Start from 0, apply offset after filtering
-          });
-          // Warn if results are truncated (helps users understand incomplete results)
-          if (results.length === searchLimit) {
-            console.warn(
-              `[SolanaChainProvider] Client-side search hit ${searchLimit} agent limit. ` +
-              `Results may be incomplete. Consider using more specific filters.`
-            );
-          }
-          // Will apply client-side pagination after filtering
-        } else {
-          // No filters: use normal pagination
-          results = await indexer.getAgents({
-            limit,
-            offset,
-          });
-          indexerPaginated = true;
+        if (requiresClientFiltering && results.length === searchLimit) {
+          console.warn(
+            `[SolanaChainProvider] Client-side search hit ${searchLimit} agent limit. ` +
+            `Results may be incomplete. Consider using more specific filters.`
+          );
         }
 
         // Apply client-side filtering using centralized helper
@@ -155,13 +140,7 @@ export class SolanaChainProvider implements IChainProvider {
           return true;
         });
 
-        // Only apply client-side pagination if indexer didn't paginate
-        // (or if we had to filter results client-side)
-        const hasTextSearch = !!(params.query || params.nameQuery || params.descriptionQuery || params.endpointQuery);
-        const needsClientPagination = !indexerPaginated || hasTextSearch ||
-          params.minQualityScore !== undefined || params.minTrustTier !== undefined;
-
-        if (needsClientPagination) {
+        if (requiresClientFiltering) {
           const paginated = results.slice(offset, offset + limit);
           return {
             results: paginated.map((a: IndexedAgent) => this.mapIndexedAgent(a)),
@@ -172,11 +151,10 @@ export class SolanaChainProvider implements IChainProvider {
           };
         }
 
-        // Indexer already paginated, return as-is
         return {
           results: results.map((a: IndexedAgent) => this.mapIndexedAgent(a)),
-          total: results.length, // Note: indexer doesn't return total count
-          hasMore: results.length === limit, // Assume more if we got a full page
+          total: results.length,
+          hasMore: results.length === limit,
           offset,
           limit,
         };
@@ -190,6 +168,8 @@ export class SolanaChainProvider implements IChainProvider {
           err instanceof Error ? err.message : String(err)
         );
       }
+    } else if (this.state.config.useIndexer && !this.state.config.forceOnChain && !this.state.config.indexerFallback) {
+      throw new Error('Indexer query failed and fallback is disabled');
     }
 
     // Fallback to on-chain query (limited)
@@ -316,24 +296,29 @@ export class SolanaChainProvider implements IChainProvider {
 
   // Optional: Indexer operations
   async isIndexerAvailable(): Promise<boolean> {
-    return this.state.isIndexerAvailable();
+    return this.canUseIndexer(this.state.getSdk());
   }
 
   async getLeaderboard(options?: ILeaderboardOptions): Promise<ILeaderboardResult> {
-    const indexer = this.state.getIndexer();
-    if (!indexer) {
+    const sdk = this.state.getSdk();
+    if (!(await this.canUseIndexer(sdk))) {
       return { entries: [], total: 0, hasMore: false };
     }
 
-    const result = await indexer.getLeaderboard({
+    const offset = options?.offset ?? 0;
+    const limit = options?.limit ?? 50;
+    const result = await sdk.getLeaderboard({
       collection: options?.collection,
-      minTier: options?.minFeedbacks ? 1 : undefined,
-      limit: options?.limit,
+      limit: offset + limit,
     });
+    const filtered = options?.minFeedbacks !== undefined
+      ? result.filter((entry) => (entry.feedback_count ?? 0) >= options.minFeedbacks!)
+      : result;
+    const paginated = filtered.slice(offset, offset + limit);
 
     return {
-      entries: result.map((a: IndexedAgent, i: number) => ({
-        rank: (options?.offset ?? 0) + i + 1,
+      entries: paginated.map((a: IndexedAgent, i: number) => ({
+        rank: offset + i + 1,
         agentId: a.asset,
         globalId: toGlobalId('sol', a.asset),
         name: a.nft_name ?? 'Unknown',
@@ -342,8 +327,8 @@ export class SolanaChainProvider implements IChainProvider {
         qualityScore: a.quality_score ?? 0,
         totalFeedbacks: a.feedback_count ?? 0,
       })),
-      total: result.length,
-      hasMore: false,
+      total: filtered.length,
+      hasMore: offset + paginated.length < filtered.length,
     };
   }
 
@@ -460,5 +445,17 @@ export class SolanaChainProvider implements IChainProvider {
       qualityScore: agent.quality_score ?? undefined,
       totalFeedbacks: agent.feedback_count ?? undefined,
     };
+  }
+
+  private async canUseIndexer(sdk: { isIndexerAvailable(): Promise<boolean> }): Promise<boolean> {
+    if (!this.state.config.useIndexer || this.state.config.forceOnChain) {
+      return false;
+    }
+
+    try {
+      return await sdk.isIndexerAvailable();
+    } catch {
+      return false;
+    }
   }
 }

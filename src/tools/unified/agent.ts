@@ -311,14 +311,16 @@ export const agentHandlers: Record<string, (args: unknown) => Promise<unknown>> 
     // If specific chain requested (not "all"), search that chain only
     if (chainPrefix && chainPrefix !== 'all') {
       const provider = globalState.chains.getByPrefix(chainPrefix as ChainPrefix);
-      if (provider) {
-        const result = await provider.searchAgents(searchParams);
-        // Cache results for future searches
-        if (globalState.isLazyCache && globalState.lazyCache) {
-          globalState.lazyCache.cacheSearchResults(result.results);
-        }
-        return successResponse(result);
+      if (!provider) {
+        return successResponse({ results: [], total: 0, hasMore: false, offset, limit });
       }
+
+      const result = await provider.searchAgents(searchParams);
+      // Cache results for future searches
+      if (globalState.isLazyCache && globalState.lazyCache) {
+        globalState.lazyCache.cacheSearchResults(result.results);
+      }
+      return successResponse(result);
     }
 
     // Multi-chain search: query ALL deployed providers in parallel

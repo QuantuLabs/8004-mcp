@@ -1,6 +1,6 @@
 // Solana data source for cache sync
 
-import type { IndexerClient, IndexedAgent } from '8004-solana';
+import type { IndexerReadClient, IndexedAgent } from '8004-solana';
 import { BaseDataSource } from '../../core/cache/data-source.js';
 import type { ISyncBatch } from '../../core/cache/data-source.js';
 import type { IUpsertAgent } from '../../core/cache/sqlite-store.js';
@@ -9,21 +9,16 @@ export class SolanaDataSource extends BaseDataSource {
   readonly sourceId = 'sol:devnet';
   readonly chainPrefix = 'sol';
 
-  private readonly indexer: IndexerClient;
+  private readonly indexer: IndexerReadClient;
 
-  constructor(indexer: IndexerClient, cluster: string = 'devnet') {
+  constructor(indexer: IndexerReadClient, cluster: string = 'devnet') {
     super();
     this.indexer = indexer;
     (this as { sourceId: string }).sourceId = `sol:${cluster}`;
   }
 
   async isAvailable(): Promise<boolean> {
-    try {
-      await this.indexer.getGlobalStats();
-      return true;
-    } catch {
-      return false;
-    }
+    return this.indexer.isAvailable();
   }
 
   async fetchBatch(options: {

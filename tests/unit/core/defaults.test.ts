@@ -65,8 +65,31 @@ describe('Network Mode Configuration', () => {
       expect(CHAIN_CONFIGS.monad.mainnet.chainId).toBe(143);
     });
 
+    it('should expose subgraph URLs for all deployed EVM chains', () => {
+      expect(CHAIN_CONFIGS.eth.testnet.subgraphUrl).toContain('/subgraphs/id/6wQRC7geo9XYAhckfmfo8kbMRLeWU8KQd3XsJqFKmZLT');
+      expect(CHAIN_CONFIGS.eth.mainnet.subgraphUrl).toContain('/subgraphs/id/FV6RR6y13rsnCxBAicKuQEwDp8ioEGiNaWaZUmvr1F8k');
+      expect(CHAIN_CONFIGS.base.testnet.subgraphUrl).toContain('/subgraphs/id/4yYAvQLFjBhBtdRCY7eUWo181VNoTSLLFd5M7FXQAi6u');
+      expect(CHAIN_CONFIGS.base.mainnet.subgraphUrl).toContain('/subgraphs/id/43s9hQRurMGjuYnC1r2ZwS6xSQktbFyXMPMqGKUFJojb');
+      expect(CHAIN_CONFIGS.poly.mainnet.subgraphUrl).toContain('/subgraphs/id/9q16PZv1JudvtnCAf44cBoxg82yK9SSsFvrjCY9xnneF');
+      expect(CHAIN_CONFIGS.bsc.testnet.subgraphUrl).toContain('/subgraphs/id/BTjind17gmRZ6YhT9peaCM13SvWuqztsmqyfjpntbg3Z');
+      expect(CHAIN_CONFIGS.bsc.mainnet.subgraphUrl).toContain('/subgraphs/id/D6aWqowLkWqBgcqmpNKXuNikPkob24ADXCciiP8Hvn1K');
+      expect(CHAIN_CONFIGS.monad.testnet.subgraphUrl).toContain('/subgraphs/id/8iiMH9sj471jbp7AwUuuyBXvPJqCEsobuHBeUEKQSxhU');
+      expect(CHAIN_CONFIGS.monad.mainnet.subgraphUrl).toContain('/subgraphs/id/4tvLxkczjhSaMiqRrCV1EyheYHyJ7Ad8jub1UUyukBjg');
+    });
+
+    it('should leave Polygon Amoy testnet without a subgraph because contracts are not deployed', () => {
+      expect(CHAIN_CONFIGS.poly.testnet.subgraphUrl).toBe('');
+      expect(CHAIN_CONFIGS.poly.testnet.registries.identity).toBe('');
+      expect(CHAIN_CONFIGS.poly.testnet.registries.reputation).toBe('');
+    });
+
     it('should have Solana devnet registries configured', () => {
-      expect(CHAIN_CONFIGS.sol.testnet.registries.identity).toBe('8oo48pya1SZD23ZhzoNMhxR2UGb8BRa41Su4qP9EuaWm');
+      expect(CHAIN_CONFIGS.sol.testnet.registries.identity).toBe('8oo4J9tBB3Hna1jRQ3rWvJjojqM5DYTDJo5cejUuJy3C');
+    });
+
+    it('should have Solana mainnet registries configured from the SDK mainnet defaults', () => {
+      expect(CHAIN_CONFIGS.sol.mainnet.registries.identity).toBe('8oo4dC4JvBLwy5tGgiH3WwK4B9PWxL9Z4XjA2jzkQMbQ');
+      expect(CHAIN_CONFIGS.sol.mainnet.indexerUrl).toBe('https://8004-indexer-main.qnt.sh/rest/v1');
     });
   });
 
@@ -102,16 +125,19 @@ describe('Network Mode Configuration', () => {
       expect(isChainDeployed('sol', 'testnet')).toBe(true);
     });
 
-    it('should return false for Solana mainnet (no registries yet)', () => {
-      expect(isChainDeployed('sol', 'mainnet')).toBe(false);
+    it('should return true for Solana mainnet when registries are configured', () => {
+      expect(isChainDeployed('sol', 'mainnet')).toBe(true);
     });
 
     it('should return true for EVM chains with testnet deployments', () => {
       expect(isChainDeployed('eth', 'testnet')).toBe(true);
       expect(isChainDeployed('base', 'testnet')).toBe(true);
-      expect(isChainDeployed('poly', 'testnet')).toBe(true);
       expect(isChainDeployed('bsc', 'testnet')).toBe(true);
       expect(isChainDeployed('monad', 'testnet')).toBe(true);
+    });
+
+    it('should return false for Polygon Amoy testnet until contracts are deployed', () => {
+      expect(isChainDeployed('poly', 'testnet')).toBe(false);
     });
 
     it('should return correct deployment status for EVM mainnet chains', () => {
@@ -129,12 +155,16 @@ describe('Network Mode Configuration', () => {
     it('should return deployed chains for testnet', () => {
       const deployed = getDeployedChains('testnet');
       expect(deployed).toContain('sol'); // Solana devnet
-      expect(deployed).toContain('eth'); // ETH Sepolia
-      // Note: Base, Poly, etc not deployed yet - only in SDK when contracts are ready
+      expect(deployed).toContain('eth');
+      expect(deployed).toContain('base');
+      expect(deployed).toContain('bsc');
+      expect(deployed).toContain('monad');
+      expect(deployed).not.toContain('poly');
     });
 
-    it('should return ETH for mainnet deployments', () => {
+    it('should return Solana and EVM chains for mainnet deployments', () => {
       const deployed = getDeployedChains('mainnet');
+      expect(deployed).toContain('sol');
       expect(deployed).toContain('eth'); // ETH mainnet is deployed
     });
   });

@@ -181,22 +181,22 @@ export class EVMChainProvider implements IChainProvider {
     const limit = params.limit ?? 20;
     const offset = params.offset ?? 0;
 
-    // Determine the name query to use based on search mode
     const mode = params.searchMode ?? 'all';
-    let nameFilter = params.nameQuery ?? params.query;
-
-    // For description mode, use descriptionQuery if provided
-    if (mode === 'description' && params.descriptionQuery) {
-      nameFilter = params.descriptionQuery;
-    }
-
-    // Endpoint search: filter by mcp/a2a capabilities
+    const nameFilter =
+      mode === 'description'
+        ? params.nameQuery
+        : (params.nameQuery ?? params.query);
+    const descriptionFilter =
+      mode === 'description'
+        ? (params.descriptionQuery ?? params.query)
+        : params.descriptionQuery;
     const endpointFilter = (mode === 'endpoint' || mode === 'all') ? params.endpointQuery : undefined;
 
-    // Build SDK SearchFilters
     const sdkFilters: SearchFilters = {
+      chains: [this.config.chainId],
       owners: params.owner ? [params.owner] : undefined,
       name: nameFilter,
+      description: descriptionFilter,
       mcpTools: params.mcpTools,
       a2aSkills: params.a2aSkills,
       oasfSkills: params.oasfSkills,
@@ -210,56 +210,69 @@ export class EVMChainProvider implements IChainProvider {
     };
 
     try {
-      // Prefer subgraph for reads (faster, no RPC calls)
       const subgraph = this.getSubgraph();
-      if (subgraph) {
-        // Fetch more if we need to filter client-side
-        const fetchLimit = endpointFilter ? Math.min(limit * 3, 100) : limit;
-        const agents = await subgraph.searchAgents(sdkFilters, fetchLimit, offset);
+      const isBrowseQuery =
+        !nameFilter &&
+        !descriptionFilter &&
+        !endpointFilter &&
+        !params.owner &&
+        !params.collection &&
+        params.minQualityScore === undefined &&
+        params.minTrustTier === undefined &&
+        !params.mcpTools?.length &&
+        !params.a2aSkills?.length &&
+        !params.oasfSkills?.length &&
+        !params.oasfDomains?.length &&
+        params.active === undefined &&
+        params.x402support === undefined &&
+        params.hasMcp === undefined &&
+        params.hasA2a === undefined &&
+        !params.keyword &&
+        !params.feedback;
 
-        // Apply client-side filtering if needed (using centralized helper)
-        let filteredAgents = agents;
-        if (endpointFilter) {
-          filteredAgents = agents.filter((a: AgentSummary) =>
-            matchesSearchFilter(
-              {
-                mcpEndpoint: a.mcp || undefined,
-                a2aEndpoint: a.a2a || undefined,
-                mcpTools: a.mcpTools,
-                a2aSkills: a.a2aSkills,
-                mcpPrompts: a.mcpPrompts,
-                mcpResources: a.mcpResources,
-              },
-              { endpointQuery: endpointFilter, searchMode: 'endpoint' }
-            )
-          );
-        }
-
-        // Apply limit after filtering
-        const paginatedAgents = filteredAgents.slice(0, limit);
+      // Keep direct subgraph browsing for large unfiltered listings.
+      // The SDK currently fetches full result sets before local pagination, which does not scale well
+      // on the largest mainnet deployments.
+      if (subgraph && isBrowseQuery) {
+        const agents = await subgraph.searchAgents(sdkFilters, limit, offset);
 
         return {
-          results: paginatedAgents.map((a: AgentSummary) => this.mapAgentSummary(a)),
-          total: filteredAgents.length,
-          hasMore: filteredAgents.length > limit,
+          results: agents.map((a: AgentSummary) => this.mapAgentSummary(a)),
+          total: agents.length,
+          hasMore: agents.length >= limit,
           offset,
           limit,
         };
       }
 
-      // Fallback to SDK (returns flat AgentSummary[])
       const sdk = this.getSdk();
       const agents = await sdk.searchAgents(sdkFilters, {
         sort: params.orderBy ? [`${params.orderBy}:${params.orderDir ?? 'desc'}`] : undefined,
       });
 
-      // Apply client-side offset/limit pagination
-      const paginatedAgents = agents.slice(offset, offset + limit);
+      let filteredAgents = agents;
+      if (endpointFilter) {
+        filteredAgents = agents.filter((a: AgentSummary) =>
+          matchesSearchFilter(
+            {
+              mcpEndpoint: a.mcp || undefined,
+              a2aEndpoint: a.a2a || undefined,
+              mcpTools: a.mcpTools,
+              a2aSkills: a.a2aSkills,
+              mcpPrompts: a.mcpPrompts,
+              mcpResources: a.mcpResources,
+            },
+            { endpointQuery: endpointFilter, searchMode: 'endpoint' }
+          )
+        );
+      }
+
+      const paginatedFilteredAgents = filteredAgents.slice(offset, offset + limit);
 
       return {
-        results: paginatedAgents.map((a: AgentSummary) => this.mapAgentSummary(a)),
-        total: agents.length,
-        hasMore: agents.length > offset + limit,
+        results: paginatedFilteredAgents.map((a: AgentSummary) => this.mapAgentSummary(a)),
+        total: filteredAgents.length,
+        hasMore: filteredAgents.length > offset + limit,
         offset,
         limit,
       };

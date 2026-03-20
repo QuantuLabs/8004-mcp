@@ -233,6 +233,14 @@ export const writeOperationTools: Tool[] = [
           type: 'string',
           description: 'New wallet address (0x...)',
         },
+        newWalletPrivateKey: {
+          type: 'string',
+          description: 'Optional private key for new wallet to sign EIP-712 message (0x...)',
+        },
+        signature: {
+          type: 'string',
+          description: 'Optional precomputed EIP-712 signature from the new wallet',
+        },
         chain: {
           type: 'string',
           description: 'Chain prefix (eth, base, etc.)',
@@ -510,12 +518,12 @@ export const writeOperationHandlers: Record<string, (args: unknown) => Promise<u
       const sdk = provider.getState().getSdk();
       const assetPubkey = new PublicKey(rawId);
 
-      // Get feedbackHash - either from parameter or fetch from indexer
+      // Get sealHash - either from parameter or fetch it through the Solana SDK
       let feedbackHash: Buffer;
       if (sealHashStr) {
         feedbackHash = parseBuffer(sealHashStr, 'sealHash');
       } else {
-        // Fetch from indexer - requires client address
+        // SDK read requires client address when sealHash is not provided
         if (!clientStr) {
           throw new Error('Either sealHash or client address is required to revoke feedback');
         }
@@ -525,7 +533,7 @@ export const writeOperationHandlers: Record<string, (args: unknown) => Promise<u
           throw new Error(`Feedback not found: agent=${rawId}, client=${clientStr}, index=${feedbackIndex}`);
         }
         if (!feedback.sealHash) {
-          throw new Error('Feedback hash not available from indexer. Please provide sealHash parameter.');
+          throw new Error('sealHash not available from Solana SDK read. Please provide sealHash parameter.');
         }
         feedbackHash = feedback.sealHash;
       }
@@ -597,18 +605,18 @@ export const writeOperationHandlers: Record<string, (args: unknown) => Promise<u
       const clientPubkey = new PublicKey(client);
       const responseHash = responseHashStr ? parseBuffer(responseHashStr, 'responseHash') : undefined;
 
-      // Get feedbackHash - either from parameter or fetch from indexer
+      // Get sealHash - either from parameter or fetch it through the Solana SDK
       let feedbackHash: Buffer;
       if (sealHashStr) {
         feedbackHash = parseBuffer(sealHashStr, 'sealHash');
       } else {
-        // Fetch from indexer
+        // SDK read fallback
         const feedback = await sdk.readFeedback(assetPubkey, clientPubkey, feedbackIndex);
         if (!feedback) {
           throw new Error(`Feedback not found: agent=${rawId}, client=${client}, index=${feedbackIndex}`);
         }
         if (!feedback.sealHash) {
-          throw new Error('Feedback hash not available from indexer. Please provide sealHash parameter.');
+          throw new Error('sealHash not available from Solana SDK read. Please provide sealHash parameter.');
         }
         feedbackHash = feedback.sealHash;
       }
@@ -665,6 +673,8 @@ export const writeOperationHandlers: Record<string, (args: unknown) => Promise<u
     const input = getArgs(args);
     const id = readString(input, 'id', true);
     const newWallet = readString(input, 'newWallet', true);
+    const newWalletPrivateKey = readString(input, 'newWalletPrivateKey');
+    const signature = readString(input, 'signature');
     const { chainPrefix } = parseChainParam(input);
 
     // Normalize ID to SDK format (chainId:tokenId)
@@ -695,7 +705,11 @@ export const writeOperationHandlers: Record<string, (args: unknown) => Promise<u
 
     const sdk = provider.getSdk();
     const agent = await sdk.loadAgent(sdkId);
-    const txHash = await agent.setWallet(newWallet as `0x${string}`);
+    const handle = await agent.setWallet(newWallet as `0x${string}`, {
+      newWalletPrivateKey,
+      signature,
+    });
+    const txHash = handle?.hash;
 
     return successResponse({
       unsigned: false,

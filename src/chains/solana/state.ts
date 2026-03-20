@@ -3,12 +3,16 @@
 import { Keypair } from '@solana/web3.js';
 import { SolanaSDK, IndexerClient, type IPFSClient } from '8004-solana';
 import type { IPFSClientConfig } from '8004-solana';
-import { DEFAULT_SOLANA_CLUSTER, DEFAULT_INDEXER_URL, DEFAULT_INDEXER_API_KEY } from '../../config/defaults.js';
+import {
+  DEFAULT_SOLANA_CLUSTER,
+  DEFAULT_INDEXER_URL,
+  DEFAULT_INDEXER_API_KEY,
+  getDefaultSolanaIndexerUrl,
+} from '../../config/defaults.js';
 import { getWalletStore } from '../../core/wallet/index.js';
 import { globalState } from '../../state/global-state.js';
 
-// Note: 8004-solana SDK currently only supports 'devnet'
-export type SolanaCluster = 'devnet';
+export type SolanaCluster = 'devnet' | 'mainnet-beta';
 
 export interface ISolanaConfig {
   cluster: SolanaCluster;
@@ -45,6 +49,14 @@ export function createDefaultConfig(): ISolanaConfig {
     indexerUrl: DEFAULT_INDEXER_URL,
     indexerApiKey: DEFAULT_INDEXER_API_KEY,
   };
+}
+
+function hasOwnProperty<T extends object>(obj: T | undefined, key: keyof ISolanaConfig): boolean {
+  return !!obj && Object.prototype.hasOwnProperty.call(obj, key);
+}
+
+function resolveIndexerUrl(cluster: SolanaCluster, override?: string): string | undefined {
+  return override ?? getDefaultSolanaIndexerUrl(cluster);
 }
 
 // Parse keypair from environment or string
@@ -86,7 +98,15 @@ export class SolanaStateManager {
   private _keypair?: Keypair;
 
   constructor(config?: Partial<ISolanaConfig>, privateKey?: string) {
-    this._config = { ...createDefaultConfig(), ...config };
+    const defaultConfig = createDefaultConfig();
+    const cluster = config?.cluster ?? defaultConfig.cluster;
+    this._config = {
+      ...defaultConfig,
+      ...config,
+      indexerUrl: hasOwnProperty(config, 'indexerUrl')
+        ? config?.indexerUrl
+        : resolveIndexerUrl(cluster),
+    };
     this._keypair = parseKeypairFromEnv(privateKey);
   }
 
@@ -96,7 +116,24 @@ export class SolanaStateManager {
   }
 
   setConfig(updates: Partial<ISolanaConfig>): void {
-    this._config = { ...this._config, ...updates };
+    const nextCluster = updates.cluster ?? this._config.cluster;
+    const clusterChanged = nextCluster !== this._config.cluster;
+    const currentDefaultIndexerUrl = resolveIndexerUrl(this._config.cluster);
+
+    const shouldRotateIndexerUrl =
+      clusterChanged &&
+      !hasOwnProperty(updates, 'indexerUrl') &&
+      this._config.indexerUrl === currentDefaultIndexerUrl;
+
+    this._config = {
+      ...this._config,
+      ...updates,
+      indexerUrl: hasOwnProperty(updates, 'indexerUrl')
+        ? updates.indexerUrl
+        : shouldRotateIndexerUrl
+          ? resolveIndexerUrl(nextCluster)
+          : this._config.indexerUrl,
+    };
     // Invalidate cached instances
     this._sdk = undefined;
     this._indexer = undefined;
@@ -148,7 +185,8 @@ export class SolanaStateManager {
     if (!this._sdk) {
       // Use this.keypair (includes wallet manager fallback) instead of this._keypair
       this._sdk = new SolanaSDK({
-        cluster: this._config.cluster,
+        // SDK d.ts still constrains cluster to 'devnet'; runtime accepts cluster strings.
+        cluster: this._config.cluster as any,
         rpcUrl: this._config.rpcUrl,
         signer: this.keypair,
         indexerUrl: this._config.useIndexer ? this._config.indexerUrl : undefined,
@@ -163,14 +201,15 @@ export class SolanaStateManager {
 
   // Indexer access
   getIndexer(): IndexerClient | undefined {
-    if (!this._config.useIndexer || !this._config.indexerUrl || !this._config.indexerApiKey) {
+    if (!this._config.useIndexer || !this._config.indexerUrl) {
       return undefined;
     }
     if (!this._indexer) {
-      this._indexer = new IndexerClient({
+      const config = {
         baseUrl: this._config.indexerUrl,
-        apiKey: this._config.indexerApiKey,
-      });
+        ...(this._config.indexerApiKey ? { apiKey: this._config.indexerApiKey } : {}),
+      };
+      this._indexer = new IndexerClient(config);
     }
     return this._indexer;
   }

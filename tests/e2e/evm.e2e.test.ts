@@ -167,6 +167,8 @@ describe.skipIf(!RUN_E2E)('EVM skipSend Tests', () => {
       const result = await provider.giveFeedback(
         {
           agentId: '1', // Token ID
+          value: 8500,
+          valueDecimals: 2,
           score: 85,
           comment: 'E2E test',
           tag1: 'quality',

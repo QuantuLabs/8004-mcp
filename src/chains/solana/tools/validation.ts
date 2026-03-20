@@ -25,6 +25,9 @@ function validateTag(tag: string | undefined): void {
   }
 }
 
+const VALIDATION_PENDING_ARCHIVED_ERROR =
+  'Validation pending reads are archived in 8004-solana v0.5.0+ and are no longer exposed by indexers or the SDK.';
+
 export function createValidationTools(getState: () => SolanaStateManager) {
   const tools: Tool[] = [];
   const handlers: Record<string, (args: unknown) => Promise<unknown>> = {};
@@ -221,7 +224,7 @@ export function createValidationTools(getState: () => SolanaStateManager) {
   // solana_validation_pending_get
   tools.push({
     name: 'solana_validation_pending_get',
-    description: 'Get pending validation requests for a validator (requires indexer)',
+    description: 'Archived compatibility shim. Pending validation reads are no longer supported by 8004-solana indexers.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -235,13 +238,8 @@ export function createValidationTools(getState: () => SolanaStateManager) {
   });
   handlers['solana_validation_pending_get'] = async (args: unknown) => {
     const input = getArgs(args);
-    const validatorStr = readString(input, 'validator', true);
-    const indexer = getState().getIndexer();
-    if (!indexer) {
-      throw new Error('Indexer not available. Configure INDEXER_URL to use this feature.');
-    }
-    const result = await indexer.getPendingValidations(validatorStr);
-    return successResponse(result);
+    readString(input, 'validator', true);
+    throw new Error(VALIDATION_PENDING_ARCHIVED_ERROR);
   };
 
   return { tools, handlers };
