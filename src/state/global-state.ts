@@ -59,6 +59,7 @@ export interface IGlobalStateSnapshot {
   };
   ipfs: {
     configured: boolean;
+    hasUploadBackend: boolean;
     hasPinata: boolean;
     hasIpfsNode: boolean;
     hasFilecoin: boolean;
@@ -89,8 +90,9 @@ class GlobalState {
     this._crawlerTimeoutMs = this._config.crawlerTimeoutMs;
 
     // Initialize IPFS from env config if available
-    if (this._config.ipfs?.pinataJwt || this._config.ipfs?.ipfsUrl) {
+    if (this._config.ipfs?.uploadUrl || this._config.ipfs?.pinataJwt || this._config.ipfs?.ipfsUrl) {
       this._ipfsService.configure({
+        uploadUrl: this._config.ipfs.uploadUrl,
         pinataJwt: this._config.ipfs.pinataJwt,
         pinataEnabled: !!this._config.ipfs.pinataJwt,
         url: this._config.ipfs.ipfsUrl,
@@ -182,7 +184,7 @@ class GlobalState {
     if ('getState' in solanaProvider && typeof solanaProvider.getState === 'function') {
       const state = (solanaProvider as { getState: () => { setConfig: (cfg: object) => void } }).getState();
       state.setConfig({
-        cluster: networkConfig.chainId as 'devnet', // TODO: extend when mainnet-beta is supported
+        cluster: networkConfig.chainId as 'devnet' | 'mainnet-beta',
         rpcUrl: networkConfig.rpcUrl,
         indexerUrl: networkConfig.indexerUrl,
       });
@@ -271,8 +273,9 @@ class GlobalState {
 
     // Reset IPFS from env config
     this._ipfsService.clearConfig();
-    if (this._config.ipfs?.pinataJwt || this._config.ipfs?.ipfsUrl) {
+    if (this._config.ipfs?.uploadUrl || this._config.ipfs?.pinataJwt || this._config.ipfs?.ipfsUrl) {
       this._ipfsService.configure({
+        uploadUrl: this._config.ipfs.uploadUrl,
         pinataJwt: this._config.ipfs.pinataJwt,
         pinataEnabled: !!this._config.ipfs.pinataJwt,
         url: this._config.ipfs.ipfsUrl,
@@ -442,6 +445,7 @@ class GlobalState {
         forceOnChain: this._config.indexer.forceOnChain,
       },
       ipfs: {
+        uploadUrl: this._config.ipfs.uploadUrl,
         pinataJwt: this._config.ipfs.pinataJwt ? '[REDACTED]' : undefined,
         ipfsUrl: this._config.ipfs.ipfsUrl,
         filecoinEnabled: this._config.ipfs.filecoinEnabled,
@@ -470,6 +474,7 @@ class GlobalState {
       },
       ipfs: {
         configured: this._ipfsService.isConfigured(),
+        hasUploadBackend: !!this._config.ipfs.uploadUrl,
         hasPinata: !!this._config.ipfs.pinataJwt,
         hasIpfsNode: !!this._config.ipfs.ipfsUrl,
         hasFilecoin: !!this._config.ipfs.filecoinEnabled,

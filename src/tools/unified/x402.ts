@@ -687,7 +687,7 @@ export const x402Handlers: Record<
     if (!feedbackUri && storeOnIpfs) {
       if (!globalState.ipfs.isConfigured()) {
         throw new Error(
-          'IPFS not configured. Either: (1) call ipfs_configure first, (2) provide feedbackUri parameter, ' +
+          'IPFS not configured. Either: (1) restore the default IPFS backend or use ipfs_configure, (2) provide feedbackUri parameter, ' +
           'or (3) use x402_feedback_build to get the file and store it yourself.'
         );
       }

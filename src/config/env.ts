@@ -2,16 +2,15 @@
 
 import {
   DEFAULT_SOLANA_CLUSTER,
-  DEFAULT_INDEXER_URL,
   DEFAULT_INDEXER_API_KEY,
   DEFAULT_CRAWLER_TIMEOUT_MS,
+  DEFAULT_IPFS_UPLOAD_URL,
   DEFAULT_NETWORK_MODE,
-  DEFAULT_PINATA_JWT,
+  getDefaultSolanaIndexerUrl,
   type NetworkMode,
 } from './defaults.js';
 
-// Note: 8004-solana SDK currently only supports 'devnet'
-export type SolanaCluster = 'devnet';
+export type SolanaCluster = 'devnet' | 'mainnet-beta';
 
 export interface ISolanaEnvConfig {
   cluster: SolanaCluster;
@@ -32,6 +31,7 @@ export interface IIndexerEnvConfig {
 }
 
 export interface IIpfsEnvConfig {
+  uploadUrl?: string;
   pinataJwt?: string;
   ipfsUrl?: string;
   filecoinEnabled: boolean;
@@ -58,30 +58,43 @@ function parseIntEnv(value: string | undefined, defaultValue: number): number {
   return Number.isFinite(parsed) ? parsed : defaultValue;
 }
 
+function parseOptionalStringEnv(value: string | undefined): string | undefined {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : undefined;
+}
+
+function parseSolanaCluster(value: string | undefined): SolanaCluster {
+  if (value === 'mainnet-beta') return 'mainnet-beta';
+  if (value === 'devnet') return 'devnet';
+  return DEFAULT_SOLANA_CLUSTER;
+}
+
 export function loadEnvConfig(): IEnvConfig {
   const env = process.env;
+  const solanaCluster = parseSolanaCluster(env.SOLANA_CLUSTER);
 
   return {
     solana: {
-      cluster: (env.SOLANA_CLUSTER as SolanaCluster) ?? DEFAULT_SOLANA_CLUSTER,
-      rpcUrl: env.SOLANA_RPC_URL,
-      privateKey: env.SOLANA_PRIVATE_KEY,
+      cluster: solanaCluster,
+      rpcUrl: parseOptionalStringEnv(env.SOLANA_RPC_URL),
+      privateKey: parseOptionalStringEnv(env.SOLANA_PRIVATE_KEY),
     },
     evm: {
-      privateKey: env.EVM_PRIVATE_KEY,
+      privateKey: parseOptionalStringEnv(env.EVM_PRIVATE_KEY),
     },
     indexer: {
-      url: env.INDEXER_URL ?? DEFAULT_INDEXER_URL,
-      apiKey: env.INDEXER_API_KEY ?? DEFAULT_INDEXER_API_KEY,
+      url: parseOptionalStringEnv(env.INDEXER_URL) ?? getDefaultSolanaIndexerUrl(solanaCluster),
+      apiKey: parseOptionalStringEnv(env.INDEXER_API_KEY) ?? DEFAULT_INDEXER_API_KEY,
       enabled: parseBooleanEnv(env.USE_INDEXER, true),
       fallback: parseBooleanEnv(env.INDEXER_FALLBACK, true),
       forceOnChain: parseBooleanEnv(env.FORCE_ON_CHAIN, false),
     },
     ipfs: {
-      pinataJwt: env.PINATA_JWT || DEFAULT_PINATA_JWT,
-      ipfsUrl: env.IPFS_URL,
+      uploadUrl: parseOptionalStringEnv(env.IPFS_UPLOAD_URL) ?? DEFAULT_IPFS_UPLOAD_URL,
+      pinataJwt: parseOptionalStringEnv(env.PINATA_JWT),
+      ipfsUrl: parseOptionalStringEnv(env.IPFS_URL),
       filecoinEnabled: parseBooleanEnv(env.FILECOIN_PIN_ENABLED, false),
-      filecoinPrivateKey: env.FILECOIN_PRIVATE_KEY,
+      filecoinPrivateKey: parseOptionalStringEnv(env.FILECOIN_PRIVATE_KEY),
     },
     crawlerTimeoutMs: parseIntEnv(env.MCP_CRAWLER_TIMEOUT_MS, DEFAULT_CRAWLER_TIMEOUT_MS),
     networkMode: (env.NETWORK_MODE as NetworkMode) ?? DEFAULT_NETWORK_MODE,

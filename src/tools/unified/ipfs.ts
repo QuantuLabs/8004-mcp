@@ -9,9 +9,9 @@ import {
 } from '../../core/parsers/common.js';
 import { successResponse } from '../../core/serializers/common.js';
 import { globalState } from '../../state/global-state.js';
-import type { IPFSClientConfig } from '8004-solana';
 import { auditLog } from '../../core/utils/audit-log.js';
 import { resolve as dnsResolve } from 'dns/promises';
+import type { McpIPFSConfig } from '../../core/services/ipfs-service.js';
 
 const IPFS_BLOCKED_HOSTS = ['localhost', '127.0.0.1', '::1', '0.0.0.0', 'metadata.google.internal', '169.254.169.254'];
 const IPFS_PRIVATE_PATTERNS = [/^127\./, /^10\./, /^172\.(1[6-9]|2[0-9]|3[0-1])\./, /^192\.168\./, /^169\.254\./, /^0\./, /^::1$/, /^fc00:/i, /^fe80:/i, /^fd[0-9a-f]{2}:/i];
@@ -53,7 +53,7 @@ async function validateIpfsUrl(urlString: string): Promise<void> {
 }
 
 
-// File size limits (shared Pinata account)
+// File size limits (shared backend upload path by default)
 const MAX_JSON_SIZE_BYTES = 100 * 1024; // 100 KB for arbitrary JSON
 const MAX_REGISTRATION_SIZE_BYTES = 20 * 1024; // 20 KB for registration files (metadata only, typically <1KB)
 const MAX_IMAGE_SIZE_BYTES = 512 * 1024; // 512 KB for images
@@ -112,7 +112,7 @@ function validateJsonSize(data: Record<string, unknown>, maxSize: number, label:
     const maxMB = (maxSize / (1024 * 1024)).toFixed(2);
     throw new Error(
       `${label} too large: ${sizeMB} MB (max ${maxMB} MB). ` +
-      'Consider hosting large files on your own IPFS node or Pinata account.'
+      'Consider hosting large files on your own IPFS node or custom storage backend.'
     );
   }
 }
@@ -214,13 +214,17 @@ function validateRegistrationSchema(data: Record<string, unknown>): Record<strin
 export const ipfsTools: Tool[] = [
   {
     name: 'ipfs_configure',
-    description: 'Configure IPFS client (Pinata, Filecoin, or node-based)',
+    description: 'Configure IPFS upload settings. Default uploads use the hosted backend; advanced users can override with Pinata, Filecoin, or a custom IPFS node.',
     inputSchema: {
       type: 'object',
       properties: {
+        uploadUrl: {
+          type: 'string',
+          description: 'Optional backend upload endpoint override',
+        },
         pinataJwt: {
           type: 'string',
-          description: 'Pinata API JWT token',
+          description: 'Optional Pinata API JWT token for explicit direct uploads',
         },
         ipfsUrl: {
           type: 'string',
@@ -310,22 +314,33 @@ export const ipfsTools: Tool[] = [
 export const ipfsHandlers: Record<string, (args: unknown) => Promise<unknown>> = {
   ipfs_configure: async (args: unknown) => {
     const input = getArgs(args);
+    const uploadUrlInput = readString(input, 'uploadUrl');
     const pinataJwt = readString(input, 'pinataJwt');
     const ipfsUrl = readString(input, 'ipfsUrl');
-    const filecoinEnabled = readBoolean(input, 'filecoinEnabled') ?? false;
+    const filecoinEnabledInput = readBoolean(input, 'filecoinEnabled');
     const filecoinPrivateKey = readString(input, 'filecoinPrivateKey');
+    const currentConfig = globalState.config.ipfs;
+    const uploadUrl = uploadUrlInput ?? currentConfig.uploadUrl;
+    const effectivePinataJwt = pinataJwt ?? currentConfig.pinataJwt;
+    const effectiveIpfsUrl = ipfsUrl ?? currentConfig.ipfsUrl;
+    const effectiveFilecoinEnabled = filecoinEnabledInput ?? currentConfig.filecoinEnabled;
+    const effectiveFilecoinPrivateKey = filecoinPrivateKey ?? currentConfig.filecoinPrivateKey;
 
     if (ipfsUrl) {
       await validateIpfsUrl(ipfsUrl);
     }
+    if (uploadUrlInput) {
+      await validateIpfsUrl(uploadUrlInput);
+    }
 
     // Build IPFS config
-    const config: IPFSClientConfig = {
-      pinataJwt,
-      pinataEnabled: !!pinataJwt,
-      url: ipfsUrl,
-      filecoinPinEnabled: filecoinEnabled,
-      filecoinPrivateKey,
+    const config: McpIPFSConfig = {
+      uploadUrl,
+      pinataJwt: effectivePinataJwt,
+      pinataEnabled: !!effectivePinataJwt,
+      url: effectiveIpfsUrl,
+      filecoinPinEnabled: effectiveFilecoinEnabled,
+      filecoinPrivateKey: effectiveFilecoinPrivateKey,
     };
 
     // Configure global IPFS service (chain-agnostic)
@@ -334,18 +349,20 @@ export const ipfsHandlers: Record<string, (args: unknown) => Promise<unknown>> =
     // Also store in global config for persistence
     globalState.setConfig({
       ipfs: {
-        pinataJwt,
-        ipfsUrl,
-        filecoinEnabled,
-        filecoinPrivateKey,
+        uploadUrl,
+        pinataJwt: effectivePinataJwt,
+        ipfsUrl: effectiveIpfsUrl,
+        filecoinEnabled: effectiveFilecoinEnabled,
+        filecoinPrivateKey: effectiveFilecoinPrivateKey,
       },
     });
 
     return successResponse({
       message: 'IPFS configured',
-      hasPinata: !!pinataJwt,
-      hasIpfsNode: !!ipfsUrl,
-      hasFilecoin: filecoinEnabled,
+      hasUploadBackend: !!uploadUrl,
+      hasPinata: !!effectivePinataJwt,
+      hasIpfsNode: !!effectiveIpfsUrl,
+      hasFilecoin: effectiveFilecoinEnabled,
     });
   },
 
@@ -365,7 +382,7 @@ export const ipfsHandlers: Record<string, (args: unknown) => Promise<unknown>> =
 
     return successResponse({
       cid,
-      gateway: `https://gateway.pinata.cloud/ipfs/${cid}`,
+      gateway: `${globalState.ipfs.getGatewayUrl()}/${cid}`,
     });
   },
 
@@ -386,7 +403,7 @@ export const ipfsHandlers: Record<string, (args: unknown) => Promise<unknown>> =
 
     return successResponse({
       cid,
-      gateway: `https://gateway.pinata.cloud/ipfs/${cid}`,
+      gateway: `${globalState.ipfs.getGatewayUrl()}/${cid}`,
       uri: `ipfs://${cid}`,
     });
   },
@@ -467,41 +484,13 @@ export const ipfsHandlers: Record<string, (args: unknown) => Promise<unknown>> =
     };
     const ext = extensions[mimeType] || '.bin';
 
-    // Get Pinata JWT for direct upload
-    const pinataJwt = globalState.ipfs.getPinataJwt();
-    if (!pinataJwt) {
-      throw new Error('Pinata JWT not configured. Images require Pinata.');
-    }
-
-    const uint8 = new Uint8Array(uploadBuffer);
-    const blob = new Blob([uint8], { type: mimeType });
-    const formData = new FormData();
-    formData.append('file', blob, `image${ext}`);
-
-    const response = await fetch('https://api.pinata.cloud/pinning/pinFileToIPFS', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${pinataJwt}`,
-      },
-      body: formData,
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Pinata upload failed: ${response.status} - ${errorText}`);
-    }
-
-    const result = await response.json() as { IpfsHash?: string };
-    const cid = result?.IpfsHash;
-    if (!cid) {
-      throw new Error(`No CID returned from Pinata`);
-    }
+    const cid = await globalState.ipfs.addBuffer(new Uint8Array(uploadBuffer), mimeType, `image${ext}`);
 
     auditLog('ipfs_add_image', { cid, mimeType, size: uploadBuffer.length });
 
     return successResponse({
       cid,
-      gateway: `https://gateway.pinata.cloud/ipfs/${cid}`,
+      gateway: `${globalState.ipfs.getGatewayUrl()}/${cid}`,
       uri: `ipfs://${cid}`,
       size: uploadBuffer.length,
       mimeType,

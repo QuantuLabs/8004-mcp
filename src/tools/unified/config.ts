@@ -7,6 +7,7 @@ import { globalState } from '../../state/global-state.js';
 import type { ChainPrefix } from '../../core/interfaces/agent.js';
 import type { SolanaChainProvider } from '../../chains/solana/provider.js';
 import type { NetworkMode } from '../../config/defaults.js';
+import { SERVER_VERSION } from '../../config/version.js';
 import { getWalletStore } from '../../core/wallet/index.js';
 import { auditLog } from '../../core/utils/audit-log.js';
 import { resolve as dnsResolve } from 'dns/promises';
@@ -209,10 +210,11 @@ export const configHandlers: Record<string, (args: unknown) => Promise<unknown>>
     // Handle chain default change
     const chain = readString(input, 'chain');
     if (chain) {
-      const chainId = chain === 'solana' ? 'sol' : chain;
-      if (globalState.chains.has(chainId)) {
-        globalState.chains.setDefault(chainId);
-        changes.push(`Default chain: ${chainId}`);
+      const chainPrefix = (chain === 'solana' ? 'sol' : chain) as ChainPrefix;
+      const provider = globalState.chains.getByPrefix(chainPrefix);
+      if (provider) {
+        globalState.chains.setDefault(provider.chainId);
+        changes.push(`Default chain: ${provider.chainId}`);
       }
     }
 
@@ -397,7 +399,7 @@ export const configHandlers: Record<string, (args: unknown) => Promise<unknown>>
 
     return successResponse({
       server: 'ok',
-      version: '0.3.0',
+      version: SERVER_VERSION,
       networkMode: networkStatus.mode,
       chains: chainHealth,
       walletStore: walletStoreStatus,

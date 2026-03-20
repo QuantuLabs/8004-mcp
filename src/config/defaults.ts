@@ -1,16 +1,19 @@
 // Default configuration values and network configs
-// Registry addresses are hardcoded from subgraph deployment configs (source of truth)
-// Subgraph URLs come from agent0-sdk where available
+// Registry addresses are hardcoded from deployment configs (source of truth)
+// Subgraph URLs come from agent0-sdk where available, with README-backed fallbacks
 
 import type { ChainType, ChainPrefix } from '../core/interfaces/agent.js';
 import {
   DEFAULT_SUBGRAPH_URLS as EVM_DEFAULT_SUBGRAPH_URLS,
 } from 'agent0-sdk';
 import {
-  PROGRAM_ID as SOLANA_PROGRAM_ID,
-  ATOM_ENGINE_PROGRAM_ID as SOLANA_ATOM_ENGINE_PROGRAM_ID,
-  DEFAULT_INDEXER_URL as SOLANA_INDEXER_URL,
+  DEVNET_AGENT_REGISTRY_PROGRAM_ID,
+  MAINNET_AGENT_REGISTRY_PROGRAM_ID,
+  DEVNET_ATOM_ENGINE_PROGRAM_ID,
+  MAINNET_ATOM_ENGINE_PROGRAM_ID,
   DEFAULT_INDEXER_API_KEY as SOLANA_INDEXER_API_KEY,
+  getDefaultIndexerUrl as getSolanaDefaultIndexerUrl,
+  getDefaultIndexerGraphqlUrl as getSolanaDefaultIndexerGraphqlUrl,
 } from '8004-solana';
 
 // Network mode: testnet for development, mainnet for production
@@ -19,6 +22,7 @@ export type NetworkMode = 'testnet' | 'mainnet';
 export const DEFAULT_NETWORK_MODE: NetworkMode = 'testnet';
 export const DEFAULT_CRAWLER_TIMEOUT_MS = 5000;
 export const DEFAULT_SYNC_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
+export type SolanaCluster = 'devnet' | 'mainnet-beta';
 
 // Chain network configuration
 export interface ChainNetworkConfig {
@@ -34,15 +38,65 @@ export interface ChainNetworkConfig {
   blockExplorer?: string;
 }
 
+// agent0-sdk currently does not ship default gateway URLs for every deployed EVM chain.
+// Source of truth for the missing subgraph IDs:
+// https://raw.githubusercontent.com/agent0lab/subgraph/refs/heads/main/README.md
+const README_EVM_SUBGRAPH_IDS: Partial<Record<number, string>> = {
+  56: 'D6aWqowLkWqBgcqmpNKXuNikPkob24ADXCciiP8Hvn1K',
+  97: 'BTjind17gmRZ6YhT9peaCM13SvWuqztsmqyfjpntbg3Z',
+  143: '4tvLxkczjhSaMiqRrCV1EyheYHyJ7Ad8jub1UUyukBjg',
+  10143: '8iiMH9sj471jbp7AwUuuyBXvPJqCEsobuHBeUEKQSxhU',
+};
+
+function getGatewayPrefix(url: string): string {
+  const match = url.match(/^(https:\/\/gateway\.thegraph\.com\/api\/[^/]+\/subgraphs\/id)\/[^/]+$/);
+  return match?.[1] ?? '';
+}
+
+// The Ethereum mainnet gateway key from agent0-sdk is authorized for the extra BSC/Monad subgraphs.
+const README_FALLBACK_GATEWAY_PREFIX = getGatewayPrefix(
+  EVM_DEFAULT_SUBGRAPH_URLS[1 as keyof typeof EVM_DEFAULT_SUBGRAPH_URLS] || ''
+);
+
 // Helper to get EVM subgraph URL from SDK (optional, returns '' for unsupported chains)
 function getEvmSubgraphUrl(chainId: number): string {
-  return EVM_DEFAULT_SUBGRAPH_URLS[chainId as keyof typeof EVM_DEFAULT_SUBGRAPH_URLS] || '';
+  const sdkUrl = EVM_DEFAULT_SUBGRAPH_URLS[chainId as keyof typeof EVM_DEFAULT_SUBGRAPH_URLS] || '';
+  if (sdkUrl) return sdkUrl;
+
+  const subgraphId = README_EVM_SUBGRAPH_IDS[chainId];
+  if (!subgraphId || !README_FALLBACK_GATEWAY_PREFIX) return '';
+
+  return `${README_FALLBACK_GATEWAY_PREFIX}/${subgraphId}`;
+}
+
+function getSolanaProgramId(cluster: SolanaCluster): string {
+  return (
+    cluster === 'mainnet-beta'
+      ? MAINNET_AGENT_REGISTRY_PROGRAM_ID
+      : DEVNET_AGENT_REGISTRY_PROGRAM_ID
+  ).toBase58();
+}
+
+function getSolanaAtomProgramId(cluster: SolanaCluster): string {
+  return (
+    cluster === 'mainnet-beta'
+      ? MAINNET_ATOM_ENGINE_PROGRAM_ID
+      : DEVNET_ATOM_ENGINE_PROGRAM_ID
+  ).toBase58();
+}
+
+export function getDefaultSolanaIndexerUrl(cluster: SolanaCluster): string {
+  return getSolanaDefaultIndexerUrl(cluster);
+}
+
+export function getDefaultSolanaIndexerGraphqlUrl(cluster: SolanaCluster): string {
+  return getSolanaDefaultIndexerGraphqlUrl(cluster);
 }
 
 // Helper to get Solana registries from SDK (source of truth)
 // Note: 8004-solana uses a consolidated single program for identity/reputation/validation
-function getSolanaRegistries(): { identity: string; reputation: string; validation: string } {
-  const programId = SOLANA_PROGRAM_ID.toBase58();
+function getSolanaRegistries(cluster: SolanaCluster): { identity: string; reputation: string; validation: string } {
+  const programId = getSolanaProgramId(cluster);
   return {
     identity: programId,
     reputation: programId, // Same consolidated program
@@ -70,9 +124,9 @@ const TESTNET_REGISTRIES = {
   reputation: '0x8004B663056A597Dffe9eCcC1965A193B7388713',
 };
 
-const POLYGON_AMOY_REGISTRIES = {
-  identity: '0x8004ad19E14B9e0654f73353e8a0B600D46C2898',
-  reputation: '0x8004B12F4C2B42d00c46479e859C92e39044C930',
+const UNDEPLOYED_REGISTRIES = {
+  identity: '',
+  reputation: '',
 };
 
 // All supported chains with their testnet/mainnet configurations
@@ -84,15 +138,15 @@ export const CHAIN_CONFIGS: Record<ChainPrefix, ChainConfig> = {
     testnet: {
       chainId: 'devnet',
       rpcUrl: 'https://api.devnet.solana.com',
-      indexerUrl: SOLANA_INDEXER_URL,
-      registries: getSolanaRegistries(),
+      indexerUrl: getDefaultSolanaIndexerUrl('devnet'),
+      registries: getSolanaRegistries('devnet'),
       blockExplorer: 'https://explorer.solana.com/?cluster=devnet',
     },
     mainnet: {
       chainId: 'mainnet-beta',
       rpcUrl: 'https://api.mainnet-beta.solana.com',
-      indexerUrl: '',
-      registries: { identity: '', reputation: '' },
+      indexerUrl: getDefaultSolanaIndexerUrl('mainnet-beta'),
+      registries: getSolanaRegistries('mainnet-beta'),
       blockExplorer: 'https://explorer.solana.com',
     },
   },
@@ -145,7 +199,7 @@ export const CHAIN_CONFIGS: Record<ChainPrefix, ChainConfig> = {
       chainId: 80002,
       rpcUrl: 'https://rpc-amoy.polygon.technology',
       subgraphUrl: getEvmSubgraphUrl(80002),
-      registries: POLYGON_AMOY_REGISTRIES,
+      registries: UNDEPLOYED_REGISTRIES,
       blockExplorer: 'https://amoy.polygonscan.com',
     },
     mainnet: {
@@ -248,47 +302,29 @@ export function getNetworkDisplayName(prefix: ChainPrefix, networkMode: NetworkM
   return `${config.displayName} ${testnetNames[prefix] ?? chainIdStr}`;
 }
 
-// Default IPFS configuration (Pinata)
-const _p = [
-  'ZXlKaGJHY2lPaUpJVXpJMU5pSXNJblI1Y0NJNklrcFhWQ0o5LmV5',
-  'SjFjMlZ5U1c1bWIzSnRZWFJwYjI0aU9uc2lhV1FpT2lJelpUZ3dN',
-  'emd5T0MwMU9XVTBMVFEwWkRRdE9EUmxaUzB3TnpZNU1URXhZVE5r',
-  'WXpjaUxDSmxiV0ZwYkNJNkluTjBaWEJvWVc1MlpYSnZibWxsUUdk',
-  'dFlXbHNMbU52YlNJc0ltVnRZV2xzWDNabGNtbG1hV1ZrSWpwMGNu',
-  'VmxMQ0p3YVc1ZmNHOXNhV041SWpwN0luSmxaMmx2Ym5NaU9sdDdJ',
-  'bVJsYzJseVpXUlNaWEJzYVdOaGRHbHZia052ZFc1MElqb3hMQ0pw',
-  'WkNJNklrWlNRVEVpZlN4N0ltUmxjMmx5WldSU1pYQnNhV05oZEds',
-  'dmJrTnZkVzUwSWpveExDSnBaQ0k2SWs1WlF6RWlmVjBzSW5abGNu',
-  'TnBiMjRpT2pGOUxDSnRabUZmWlc1aFlteGxaQ0k2Wm1Gc2MyVXNJ',
-  'bk4wWVhSMWN5STZJa0ZEVkVsV1JTSjlMQ0poZFhSb1pXNTBhV05o',
-  'ZEdsdmJsUjVjR1VpT2lKelkyOXdaV1JMWlhraUxDSnpZMjl3WldS',
-  'TFpYbExaWGtpT2lKaE5HUXhPR0ZqWVRrMk56WTVORFF4Tm1VeVpp',
-  'SXNJbk5qYjNCbFpFdGxlVk5sWTNKbGRDSTZJalJoT0dZMk16ZzRO',
-  'RFU1TkRaa05EVXdPREZrWm1abVlXSTFOalkzWXpaalpEbGtZMlUx',
-  'Wm1FeU5HTTBOVFV3Tm1OaU9UQXpOak00TVRFd05XRTBORGNpTENK',
-  'bGVIQWlPakU0TURFMk5EWTFNRGQ5LmI2bnBsSk5YdXpBbjBkWkhJ',
-  'Unl3ODFkSWh5N21QQjdjTmFUWHRGVlBjaGM=',
-];
-export const DEFAULT_PINATA_JWT = Buffer.from(_p.join(''), 'base64').toString('utf8');
+// Default IPFS upload path for zero-config MCP usage.
+export const DEFAULT_IPFS_UPLOAD_URL = 'https://studio.qnt.sh/api/mcp/ipfs/upload';
+export const DEFAULT_IPFS_GATEWAY_URL = 'https://gateway.pinata.cloud/ipfs';
 
 // Legacy exports for backward compatibility - values from SDKs (source of truth)
 export const DEFAULT_SOLANA_CLUSTER = 'devnet' as const;
 export const DEFAULT_SOLANA_RPC_URL = CHAIN_CONFIGS.sol.testnet.rpcUrl;
-export const DEFAULT_INDEXER_URL = SOLANA_INDEXER_URL;
+export const DEFAULT_INDEXER_URL = getDefaultSolanaIndexerUrl(DEFAULT_SOLANA_CLUSTER);
+export const DEFAULT_INDEXER_GRAPHQL_URL = getDefaultSolanaIndexerGraphqlUrl(DEFAULT_SOLANA_CLUSTER);
 export const DEFAULT_INDEXER_API_KEY = SOLANA_INDEXER_API_KEY;
 
 export const SOLANA_PROGRAM_IDS = {
   devnet: {
-    agentRegistry: SOLANA_PROGRAM_ID.toBase58(),
-    atomEngine: SOLANA_ATOM_ENGINE_PROGRAM_ID.toBase58(),
+    agentRegistry: getSolanaProgramId('devnet'),
+    atomEngine: getSolanaAtomProgramId('devnet'),
   },
   'mainnet-beta': {
-    agentRegistry: '', // TBD - will come from SDK when deployed
-    atomEngine: '',
+    agentRegistry: getSolanaProgramId('mainnet-beta'),
+    atomEngine: getSolanaAtomProgramId('mainnet-beta'),
   },
   testnet: {
-    agentRegistry: '',
-    atomEngine: '',
+    agentRegistry: getSolanaProgramId('devnet'),
+    atomEngine: getSolanaAtomProgramId('devnet'),
   },
 } as const;
 

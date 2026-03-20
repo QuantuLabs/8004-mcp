@@ -17,6 +17,7 @@ import { SolanaDataSource } from './chains/solana/data-source.js';
 import { EVMChainProvider } from './chains/evm/provider.js';
 import { loadEnvConfig } from './config/env.js';
 import { CHAIN_CONFIGS, getDeployedChains } from './config/defaults.js';
+import { SERVER_VERSION } from './config/version.js';
 import type { ChainPrefix } from './core/interfaces/agent.js';
 import {
   registerUnifiedTools,
@@ -27,14 +28,7 @@ import { formatOutput } from './core/serializers/common.js';
 import { sanitizeErrorMessage } from './core/errors/mcp-error.js';
 import { getWalletManager } from './core/wallet/index.js';
 
-import { readFileSync } from 'fs';
-import { fileURLToPath } from 'url';
-import { dirname, join as pathJoin } from 'path';
-
 const SERVER_NAME = '8004-mcp';
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const pkg = JSON.parse(readFileSync(pathJoin(__dirname, '..', 'package.json'), 'utf-8')) as { version: string };
-const SERVER_VERSION = pkg.version;
 
 async function main() {
   // Load environment configuration
