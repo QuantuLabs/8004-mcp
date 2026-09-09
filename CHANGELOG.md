@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.4.1] - 2026-09-09
+
+### Changed
+- Updated `8004-solana` to `^0.8.4` and aligned the advertised Node.js minimum with the SDK requirement (`>=20.19.0`)
+
 ## [0.4.0] - 2026-03-20
 
 ### Changed
